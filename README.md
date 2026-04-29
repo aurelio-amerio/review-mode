@@ -1,5 +1,7 @@
 # Review Mode for VS Code
 
+![Review Mode Interface](img/interface.jpg)
+
 Review Mode is a powerful VS Code extension designed to bring enhanced collaboration and review tools directly into your editor for any text file.
 
 It can be used in two primary ways:
