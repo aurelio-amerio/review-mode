@@ -1,0 +1,12 @@
+src/**
+out/**
+.vscode/**
+node_modules/**
+tsconfig.json
+esbuild.js
+.gitignore
+.cline/**
+.clinerules/**
+.github/**
+.revisions/**
+test_directive.json

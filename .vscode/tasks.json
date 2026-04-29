@@ -1,0 +1,24 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "compile",
+      "problemMatcher": "$esbuild-watch",
+      "isBackground": false,
+      "group": "build",
+      "label": "npm: compile"
+    },
+    {
+      "label": "package vsix",
+      "type": "shell",
+      "command": "npx @vscode/vsce package --no-dependencies",
+      "dependsOn": "npm: compile",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}

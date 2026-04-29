@@ -1,0 +1,47 @@
+# Dependency directory
+node_modules/
+
+# Build and Output
+out/
+dist/
+
+# Tests
+.vscode-test/
+coverage/
+.nyc_output/
+
+# VS Code Extensions
+*.vsix
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Editor directories and files
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# revisions
+.revisions
+docs
+test_directive.json

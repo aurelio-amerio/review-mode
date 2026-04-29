@@ -1,0 +1,187 @@
+{
+  "name": "review-mode",
+  "publisher": "aurelio-amerio",
+  "displayName": "Review Mode",
+  "description": "A comprehensive review tool for Markdown that allows adding threaded annotations, tracking revisions, and managing comments.",
+  "version": "0.0.13",
+  "icon": "media/icon.png",
+  "author": "aurelio-amerio",
+  "license": "MIT",
+  "keywords": [
+    "review",
+    "annotations",
+    "comments",
+    "collaboration",
+    "markdown"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aurelio-amerio/review-mode"
+  },
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onUri",
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Review Mode",
+      "properties": {
+        "reviewMode.revisionsDirectory": {
+          "type": "string",
+          "default": ".revisions",
+          "description": "Directory name used to store revision snapshots and thread notes. Defaults to '.revisions'."
+        }
+      }
+    },
+    "chatParticipants": [
+      {
+        "id": "review-mode.reviewer",
+        "name": "review-mode",
+        "fullName": "Review Mode",
+        "description": "Open Markdown files in Review Mode with threaded annotations",
+        "commands": [
+          {
+            "name": "review",
+            "description": "Open a file in Review Mode (active file or provide a path)"
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "reviewMode.open",
+        "title": "Review Mode: Open File",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "reviewMode.close",
+        "title": "Review Mode: Close"
+      },
+      {
+        "command": "reviewMode.addNote",
+        "title": "Review Mode: Add Note"
+      },
+      {
+        "command": "reviewMode.reply",
+        "title": "Reply",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "reviewMode.deleteMessage",
+        "title": "Delete Message",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "reviewMode.deleteThread",
+        "title": "Delete Thread",
+        "icon": "$(close-all)"
+      },
+      {
+        "command": "reviewMode.scrollToLine",
+        "title": "Scroll to Line"
+      },
+      {
+        "command": "reviewMode.refreshFiles",
+        "title": "Refresh Review Files",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "reviewMode.deleteReviews",
+        "title": "Delete Revisions",
+        "icon": "$(trash)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "reviewModeExplorer",
+          "title": "Review Mode",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "reviewModeExplorer": [
+        {
+          "id": "reviewModeFiles",
+          "name": "Under Review"
+        },
+        {
+          "id": "reviewModeAnnotations",
+          "name": "Review Notes",
+          "when": "reviewMode.active"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "reviewMode.refreshFiles",
+          "when": "view == reviewModeFiles",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "reviewMode.open",
+          "when": "resourceExtname == .md",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "reviewMode.open",
+          "when": "resourceExtname == .md",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "reviewMode.reply",
+          "when": "view == reviewModeAnnotations && viewItem == annotation",
+          "group": "inline"
+        },
+        {
+          "command": "reviewMode.deleteMessage",
+          "when": "view == reviewModeAnnotations && viewItem == message",
+          "group": "inline"
+        },
+        {
+          "command": "reviewMode.deleteThread",
+          "when": "view == reviewModeAnnotations && viewItem == annotation",
+          "group": "inline"
+        },
+        {
+          "command": "reviewMode.deleteReviews",
+          "when": "view == reviewModeFiles && viewItem == reviewedFile",
+          "group": "inline"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && node esbuild.js",
+    "check-types": "tsc --noEmit",
+    "watch": "node esbuild.js --watch",
+    "package": "npm run check-types && node esbuild.js --production"
+  },
+  "devDependencies": {
+    "@types/diff": "^7.0.0",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.93.0",
+    "@vscode/codicons": "^0.0.45",
+    "diff": "^7.0.0",
+    "marked": "^12.0.0",
+    "shiki": "^1.0.0",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.3.0"
+  }
+}

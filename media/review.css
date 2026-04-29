@@ -1,0 +1,872 @@
+:root {
+    color-scheme: dark;
+    --bg: var(--vscode-editor-background);
+    --fg: var(--vscode-editor-foreground);
+    --border: var(--vscode-panel-border, #333);
+    --accent: #2563eb;
+    --highlight: rgba(37, 99, 235, 0.1);
+    --hover-bg: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.05));
+    --comment-bg: var(--vscode-editorWidget-background, #252526);
+    --comment-border: var(--vscode-editorWidget-border, #454545);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--vscode-editor-font-family, 'Consolas', monospace);
+    font-size: var(--vscode-editor-font-size, 14px);
+    line-height: 1.5;
+    padding: 0;
+}
+
+/* Markdown mode uses proportional font for readability */
+body.markdown-content {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-size: 14px;
+}
+
+/* --- Two-pane layout --- */
+.review-layout {
+    display: flex;
+    min-height: 100vh;
+}
+
+.code-pane {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    padding-left: 48px;
+}
+
+.comments-pane {
+    width: 320px;
+    min-width: 280px;
+    border-left: 1px solid var(--border);
+    background: var(--bg);
+    overflow-y: auto;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    padding: 8px 0;
+}
+
+/* --- Pane Tabs (Comments | History) --- */
+.pane-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    padding: 0;
+    margin-bottom: 8px;
+}
+
+.pane-tab {
+    flex: 1;
+    padding: 8px 14px;
+    font-size: 0.85em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--vscode-descriptionForeground, #888);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    text-align: center;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.pane-tab:hover {
+    color: var(--fg);
+}
+
+.pane-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+/* --- Tab Content Visibility --- */
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* --- History Items --- */
+.history-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.history-item:hover {
+    background: var(--hover-bg);
+}
+
+.history-item.active {
+    border-left-color: var(--accent);
+    background: var(--highlight);
+}
+
+.history-rev {
+    font-family: var(--vscode-editor-font-family, 'Consolas', monospace);
+    font-weight: 700;
+    font-size: 0.85em;
+    color: var(--accent);
+    min-width: 40px;
+}
+
+.history-date {
+    font-size: 0.8em;
+    color: var(--vscode-descriptionForeground, #888);
+    flex: 1;
+}
+
+.history-count {
+    font-size: 0.75em;
+    color: var(--vscode-descriptionForeground, #888);
+    background: rgba(255, 255, 255, 0.06);
+    padding: 1px 6px;
+    border-radius: 8px;
+}
+
+.history-count.all-addressed {
+    color: #4ade80;
+    background: rgba(74, 222, 128, 0.12);
+}
+
+.history-empty {
+    padding: 20px 14px;
+    text-align: center;
+    color: var(--vscode-descriptionForeground, #888);
+    font-size: 0.85em;
+    font-style: italic;
+}
+
+/* --- Line container --- */
+.line-container {
+    position: relative;
+    min-height: 1.4em;
+    border-left: 3px solid transparent;
+    transition: border-color 0.15s, background 0.15s;
+    padding-left: 4px;
+}
+
+/* Empty lines should collapse to a thin spacer */
+.line-container.empty-line {
+    min-height: 0.5em;
+}
+
+.line-container:hover {
+    background: var(--hover-bg);
+}
+
+.line-container.annotated {
+    border-left-color: var(--accent);
+    background: var(--highlight);
+}
+
+/* --- Gutter (positioned in the left margin) --- */
+.line-gutter {
+    position: absolute;
+    left: -44px;
+    top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    user-select: none;
+}
+
+.line-number {
+    color: var(--vscode-editorLineNumber-foreground, #858585);
+    font-size: 0.8em;
+    min-width: 24px;
+    text-align: right;
+    font-family: var(--vscode-editor-font-family, 'Consolas', monospace);
+}
+
+/* Hide line numbers in markdown mode — just show the "+" button */
+.markdown-content .line-number {
+    display: none;
+}
+
+.add-note-btn {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.15s, transform 0.1s;
+    flex-shrink: 0;
+    padding: 2px;
+}
+
+.line-container:hover .add-note-btn,
+.line-container.annotated .add-note-btn {
+    opacity: 1;
+}
+
+.add-note-btn:hover {
+    transform: scale(1.15);
+}
+
+.add-note-btn:active {
+    transform: scale(0.95);
+}
+
+/* --- Line content --- */
+.line-content {
+    flex: 1;
+    padding: 0 16px 0 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* --- Annotation count badge --- */
+.annotation-badge {
+    background: var(--accent);
+    color: white;
+    border-radius: 10px;
+    padding: 0 6px;
+    font-size: 0.7em;
+    margin-left: 8px;
+    flex-shrink: 0;
+    align-self: center;
+}
+
+/* ═══════════════════════════════════════════════════
+   Markdown rendered content (adapted from vscode-beautiful-md)
+   ═══════════════════════════════════════════════════ */
+
+/* --- Headings --- */
+.markdown-content .line-content h1 {
+    font-size: 2em;
+    font-weight: 700;
+    margin: 0.6em 0 0.3em;
+    padding-bottom: 0.25em;
+    border-bottom: 1px solid var(--vscode-editorGroup-border, #444);
+    color: var(--vscode-editor-foreground, #e0e0e0);
+}
+
+.markdown-content .line-content h2 {
+    font-size: 1.5em;
+    font-weight: 600;
+    margin: 0.5em 0 0.25em;
+    padding-bottom: 0.15em;
+    border-bottom: 1px solid var(--vscode-editorGroup-border, #333);
+}
+
+.markdown-content .line-content h3 {
+    font-size: 1.25em;
+    font-weight: 600;
+    margin: 0.4em 0 0.2em;
+}
+
+.markdown-content .line-content h4,
+.markdown-content .line-content h5,
+.markdown-content .line-content h6 {
+    font-size: 1em;
+    font-weight: 600;
+    margin: 0.3em 0 0.15em;
+}
+
+/* --- Paragraph --- */
+.markdown-content .line-content p {
+    margin: 0.5em 0;
+}
+
+/* --- Links --- */
+.markdown-content .line-content a {
+    color: var(--vscode-textLink-foreground, #3794ff);
+    text-decoration: none;
+}
+
+.markdown-content .line-content a:hover {
+    text-decoration: underline;
+}
+
+/* --- Text formatting --- */
+.markdown-content .line-content strong {
+    font-weight: 700;
+    color: var(--vscode-editor-foreground, #e0e0e0);
+}
+
+.markdown-content .line-content em {
+    font-style: italic;
+}
+
+.markdown-content .line-content del {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+/* --- Code --- */
+.markdown-content .line-content code {
+    font-family: 'Fira Code', 'Cascadia Code', var(--vscode-editor-font-family, monospace);
+    background: var(--vscode-textCodeBlock-background, #2d2d2d);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.markdown-content .line-content pre {
+    background: var(--vscode-textCodeBlock-background, #1a1a2e);
+    border: 1px solid var(--vscode-editorGroup-border, #333);
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin: 0.8em 0;
+    overflow-x: auto;
+}
+
+.markdown-content .line-content pre code {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* --- Blockquote --- */
+.markdown-content .line-content blockquote {
+    border-left: 4px solid var(--vscode-textLink-foreground, #3794ff);
+    margin: 0.8em 0;
+    padding: 8px 16px;
+    background: rgba(55, 148, 255, 0.06);
+    border-radius: 0 6px 6px 0;
+}
+
+.markdown-content .line-content blockquote p {
+    margin: 0.25em 0;
+}
+
+/* --- Lists (individual list item lines) --- */
+.md-list-item .line-content {
+    padding-left: 4px;
+}
+
+.md-list-item .line-content li {
+    margin: 0;
+}
+
+/* Fallback for block-rendered lists (e.g. nested) */
+.markdown-content .line-content ul,
+.markdown-content .line-content ol {
+    margin: 0.3em 0;
+    padding-left: 2em;
+}
+
+.markdown-content .line-content li {
+    margin: 0.1em 0;
+}
+
+.markdown-content .line-content li>ul,
+.markdown-content .line-content li>ol {
+    margin: 0.15em 0;
+}
+
+/* --- Checklists --- */
+.markdown-content .line-content ul:has(> li > input[type="checkbox"]) {
+    list-style: none;
+    padding-left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.markdown-content .line-content li:has(> input[type="checkbox"]) {
+    display: flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 6px;
+    transition: background 0.15s;
+    margin: 0;
+}
+
+.markdown-content .line-content li:has(> input[type="checkbox"]):hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.markdown-content .line-content input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
+    margin-right: 8px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+    background: transparent;
+}
+
+.markdown-content .line-content input[type="checkbox"]:checked {
+    background: var(--vscode-textLink-foreground, #3794ff);
+    border-color: var(--vscode-textLink-foreground, #3794ff);
+}
+
+.markdown-content .line-content input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 0px;
+    width: 5px;
+    height: 9px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.markdown-content .line-content li:has(> input[type="checkbox"]:checked) {
+    color: rgba(255, 255, 255, 0.35);
+    text-decoration: line-through;
+    text-decoration-color: rgba(255, 255, 255, 0.2);
+}
+
+/* --- Tables --- */
+.markdown-content .line-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.8em 0;
+}
+
+.markdown-content .line-content th,
+.markdown-content .line-content td {
+    border: 1px solid var(--vscode-editorGroup-border, #444);
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.markdown-content .line-content th {
+    background: var(--vscode-editorGroupHeader-tabsBackground, #252526);
+    font-weight: 600;
+}
+
+.markdown-content .line-content tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* --- Horizontal rule --- */
+.markdown-content .line-content hr {
+    border: none;
+    height: 1px;
+    background: var(--vscode-editorGroup-border, #444);
+    margin: 1.2em 0;
+}
+
+/* --- Images --- */
+.markdown-content .line-content img {
+    max-width: 100%;
+    border-radius: 6px;
+    margin: 0.4em 0;
+}
+
+/* --- Scrollbar --- */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--vscode-scrollbarSlider-background, #555);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--vscode-scrollbarSlider-hoverBackground, #777);
+}
+
+/* --- Selection highlight for multi-line --- */
+.line-container.selected {
+    background: rgba(37, 99, 235, 0.08);
+}
+
+/* --- Inline comment input (in code pane) --- */
+.inline-comment-form {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px 8px 70px;
+    background: var(--vscode-input-background, #1e1e1e);
+    border-left: 3px solid var(--accent);
+}
+
+.inline-comment-input {
+    flex: 1;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border, #444);
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: inherit;
+    outline: none;
+}
+
+.inline-comment-input:focus {
+    border-color: var(--accent);
+}
+
+.inline-comment-submit {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: inherit;
+}
+
+.inline-comment-cancel {
+    background: transparent;
+    color: var(--vscode-descriptionForeground);
+    border: 1px solid var(--vscode-input-border, #444);
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: inherit;
+}
+
+/* ============================
+   Right-side comment threads
+   ============================ */
+
+.comment-thread {
+    margin: 6px 10px;
+    background: var(--comment-bg);
+    border: 1px solid var(--comment-border);
+    border-radius: 6px;
+    overflow: hidden;
+    transition: box-shadow 0.15s;
+}
+
+.comment-thread:hover {
+    box-shadow: 0 0 0 1px var(--accent);
+}
+
+.comment-thread.active {
+    box-shadow: 0 0 0 2px var(--accent);
+}
+
+.comment-thread-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: rgba(37, 99, 235, 0.08);
+    font-size: 1em;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: pointer;
+    user-select: none;
+}
+
+.comment-thread-header:hover {
+    background: rgba(37, 99, 235, 0.15);
+}
+
+.comment-thread-line {
+    font-variant-numeric: tabular-nums;
+}
+
+/* --- Deleted-line warning styles --- */
+.deleted-line-thread {
+    border-color: rgba(251, 191, 36, 0.3);
+}
+
+.deleted-line-header {
+    background: repeating-linear-gradient(-45deg,
+            rgba(251, 191, 36, 0.06),
+            rgba(251, 191, 36, 0.06) 4px,
+            rgba(251, 191, 36, 0.12) 4px,
+            rgba(251, 191, 36, 0.12) 8px);
+    color: #fbbf24;
+}
+
+.deleted-line-header:hover {
+    background: repeating-linear-gradient(-45deg,
+            rgba(251, 191, 36, 0.10),
+            rgba(251, 191, 36, 0.10) 4px,
+            rgba(251, 191, 36, 0.18) 4px,
+            rgba(251, 191, 36, 0.18) 8px);
+}
+
+.deleted-line-badge {
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.12);
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 4px;
+    letter-spacing: 0.02em;
+}
+
+.comment-thread-delete {
+    background: none;
+    border: none;
+    color: var(--vscode-descriptionForeground, #888);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.comment-thread:hover .comment-thread-delete {
+    opacity: 0.6;
+}
+
+.comment-thread-delete:hover {
+    opacity: 1 !important;
+    color: var(--vscode-errorForeground, #f44);
+}
+
+/* --- Priority dropdown --- */
+.priority-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    color: var(--vscode-descriptionForeground, #888);
+    font-size: 0.85em;
+    padding: 1px 18px 1px 6px;
+    cursor: pointer;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+    margin-left: auto;
+    margin-right: 6px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23888' d='M0 2l4 4 4-4z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 5px center;
+}
+
+.priority-select:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.priority-select:focus {
+    border-color: var(--accent);
+}
+
+.priority-select.priority-none {
+    color: var(--vscode-descriptionForeground, #888);
+}
+
+.priority-select.priority-low {
+    color: #4ade80;
+    border-color: rgba(74, 222, 128, 0.3);
+}
+
+.priority-select.priority-medium {
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.3);
+}
+
+.priority-select.priority-high {
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.3);
+}
+
+.priority-select.priority-urgent {
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.5);
+    font-weight: 600;
+}
+
+.priority-select option {
+    background: var(--vscode-dropdown-background, #3c3c3c);
+    color: var(--fg);
+    font-weight: normal;
+}
+
+/* --- Status bar --- */
+.comment-status-bar {
+    display: flex;
+    gap: 2px;
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid var(--comment-border);
+}
+
+.status-btn {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--vscode-descriptionForeground, #666);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 1px 6px;
+    transition: all 0.15s;
+    opacity: 0.5;
+}
+
+.status-btn:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.status-btn.active {
+    opacity: 1;
+    font-weight: 600;
+}
+
+.status-btn.active.status-open {
+    color: var(--vscode-descriptionForeground, #888);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.status-btn.active.status-in-progress {
+    color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.status-btn.active.status-resolved {
+    color: #4ade80;
+    border-color: rgba(74, 222, 128, 0.3);
+}
+
+.status-btn.active.status-wont-fix {
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.3);
+}
+
+.comment-message {
+    padding: 6px 10px;
+    border-top: 1px solid var(--comment-border);
+    font-size: 1em;
+    line-height: 1.5;
+    position: relative;
+}
+
+.comment-message:first-child {
+    border-top: none;
+}
+
+.comment-message-text {
+    word-break: break-word;
+}
+
+.comment-message-time {
+    font-size: 0.75em;
+    color: var(--vscode-descriptionForeground, #888);
+    margin-top: 2px;
+}
+
+.comment-message-delete {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: none;
+    border: none;
+    color: var(--vscode-descriptionForeground, #888);
+    cursor: pointer;
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.comment-message:hover .comment-message-delete {
+    opacity: 0.6;
+}
+
+.comment-message-delete:hover {
+    opacity: 1 !important;
+    color: var(--vscode-errorForeground, #f44);
+}
+
+/* Reply input at bottom of thread */
+.comment-reply-area {
+    display: flex;
+    gap: 4px;
+    padding: 6px 8px;
+    border-top: 1px solid var(--comment-border);
+}
+
+.comment-reply-input {
+    flex: 1;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border, #444);
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 1em;
+    outline: none;
+}
+
+.comment-reply-input:focus {
+    border-color: var(--accent);
+}
+
+.comment-reply-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 1em;
+    flex-shrink: 0;
+}
+
+.comment-reply-btn:hover {
+    opacity: 0.9;
+}
+
+.comments-empty {
+    padding: 20px 14px;
+    text-align: center;
+    color: var(--vscode-descriptionForeground, #888);
+    font-size: 0.85em;
+    font-style: italic;
+}
+
+/* ═══════════════════════════════════════════════════
+   Responsive: narrow viewport fallback
+   Gutter goes inline when there's not enough margin space
+   ═══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+    .code-pane {
+        padding-left: 0;
+    }
+
+    .line-container {
+        display: flex;
+        align-items: flex-start;
+        padding-left: 0;
+    }
+
+    .line-gutter {
+        position: static;
+        min-width: 50px;
+        padding: 0 4px 0 8px;
+        flex-shrink: 0;
+    }
+
+    .markdown-content .line-number {
+        display: inline;
+    }
+}
