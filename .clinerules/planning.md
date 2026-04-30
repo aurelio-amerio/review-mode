@@ -10,5 +10,6 @@ When writing an implementation plan, design spec, or architecture document:
    ```
    *(If the `open_review` tool is not available due to being in Plan Mode, ask the user to open the file manually by right-clicking it in the Explorer sidebar and selecting "Open in Review Mode".)*
 4. Print a brief status message: "📋 The implementation plan is ready for review in Review Mode."
-5. When the user asks to iterate (or types `/review`), follow `.clinerules/workflows/review.md` to fetch annotations from disk, implement changes, resolve comments, and re-open in Review Mode. **Never ask the user to paste their comments.**
-6. Iterate based on annotations until the user explicitly approves the plan
+5. If a plan has been opened in Review Mode, and the user switches to act mode, this means the user still wants to iterate on the plan. In this case, follow the workflow in `.clinerules/workflows/review.md` to fetch annotations from disk, implement changes, resolve comments, and re-open in Review Mode. **Never ask the user to paste their comments.**
+6. When the user asks to iterate (or types `/review`), follow `.clinerules/workflows/review.md` to fetch annotations from disk, implement changes, resolve comments, and re-open in Review Mode. **Never ask the user to paste their comments.**
+7. Iterate based on annotations until the user explicitly approves the plan

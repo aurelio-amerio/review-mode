@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AnnotationStore } from './annotationStore';
@@ -18,8 +19,11 @@ export class ReviewModeController {
         this.webview.onRevisionRequested = (originalPath: string, revision: number) => this.openRevision(originalPath, revision);
     }
 
-    /** Open the active file in review mode. */
-    async open(): Promise<void> {
+    /** Open the active file in review mode.
+     *  @param workspaceRootOverride  Optional workspace root path (e.g. from an MCP directive)
+     *         used when the file lives outside the current workspace folders.
+     */
+    async open(workspaceRootOverride?: string): Promise<void> {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
             vscode.window.showErrorMessage('No active file to review.');
@@ -31,13 +35,42 @@ export class ReviewModeController {
         const fileName = path.basename(originalUri.fsPath);
         const baseName = path.basename(fileName, path.extname(fileName));
 
-        // Determine workspace root (fallback to file director if not in a workspace)
+        // Determine workspace root:
+        // 1. If the file belongs to a workspace folder, use that
+        // 2. Else if a workspace root override was provided (from MCP directive), use that
+        // 3. Else use the first workspace folder
+        // 4. Else fall back to the file's directory (solo file, no workspace)
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(originalUri);
-        const rootPath = workspaceFolder ? workspaceFolder.uri.fsPath : originalDir;
+        let rootPath: string;
+        let isExternal = false;
 
-        // Generate a flat folder name from the relative path: src/utils/test.md -> src_utils_test_md
-        const relativePath = path.relative(rootPath, originalUri.fsPath);
-        const folderName = relativePath.replace(/[\\/.]/g, '_');
+        if (workspaceFolder) {
+            rootPath = workspaceFolder.uri.fsPath;
+        } else if (workspaceRootOverride) {
+            rootPath = workspaceRootOverride;
+            isExternal = true;
+        } else if (vscode.workspace.workspaceFolders?.length) {
+            rootPath = vscode.workspace.workspaceFolders[0].uri.fsPath;
+            isExternal = true;
+        } else {
+            rootPath = originalDir;
+        }
+
+        // Compute folder name for .revisions/ storage:
+        // - External files: deterministic hash-based name to avoid ugly "../" artifacts
+        // - Internal files: workspace-relative path (preserves current behaviour)
+        let folderName: string;
+        let relativePath: string;
+
+        if (isExternal) {
+            const normalized = originalUri.fsPath.replace(/\\/g, '/').toLowerCase();
+            const shortHash = crypto.createHash('sha256').update(normalized).digest('hex').substring(0, 8);
+            folderName = `_ext_${baseName}_${shortHash}`;
+            relativePath = originalUri.fsPath; // absolute path — stored as sourceFile
+        } else {
+            relativePath = path.relative(rootPath, originalUri.fsPath);
+            folderName = relativePath.replace(/[\\/.]/g, '_');
+        }
 
         const revisionsDirName = vscode.workspace.getConfiguration('reviewMode').get<string>('revisionsDirectory', '.revisions');
         const plansRoot = path.join(rootPath, revisionsDirName);
@@ -57,8 +90,10 @@ export class ReviewModeController {
             snapshotPath = path.join(plansDir, snapshotName);
             fs.copyFileSync(originalUri.fsPath, snapshotPath);
 
-            // Save sourceFile as a workspace-relative path instead of plansDir-relative
-            const workspaceRelativeSource = relativePath.replace(/\\/g, '/');
+            // sourceFile: absolute for external files, workspace-relative for internal
+            const workspaceRelativeSource = isExternal
+                ? originalUri.fsPath.replace(/\\/g, '/')
+                : relativePath.replace(/\\/g, '/');
             this.store.initNew(workspaceRelativeSource, revisionsPath, snapshotName, plansDir);
         } else {
             // --- Reopening: check for changes ---

@@ -35,11 +35,11 @@ export function activate(context: vscode.ExtensionContext) {
 
     // --- Core commands ---
     context.subscriptions.push(
-        vscode.commands.registerCommand('reviewMode.open', async (uri?: vscode.Uri) => {
+        vscode.commands.registerCommand('reviewMode.open', async (uri?: vscode.Uri, workspaceRoot?: string) => {
             if (uri) {
                 await vscode.window.showTextDocument(uri);
             }
-            await controller.open();
+            await controller.open(workspaceRoot);
         }),
         vscode.commands.registerCommand('reviewMode.close', () => controller.close()),
     );

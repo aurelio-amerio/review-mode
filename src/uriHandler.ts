@@ -55,7 +55,8 @@ export class ReviewModeUriHandler implements vscode.UriHandler {
 
         // Open the file, then trigger review mode
         const fileUri = vscode.Uri.file(filePath);
-        await vscode.commands.executeCommand('reviewMode.open', fileUri);
+        const workspace = params.get('workspace') ?? undefined;
+        await vscode.commands.executeCommand('reviewMode.open', fileUri, workspace);
     }
 }
 

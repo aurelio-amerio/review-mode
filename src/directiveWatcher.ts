@@ -245,6 +245,7 @@ async function processDirective(uri: vscode.Uri): Promise<void> {
 
 async function executeOpenReview(args: unknown[]): Promise<void> {
     const rawPath = args[0];
+    const rawWorkspace = args[1];
 
     if (typeof rawPath !== 'string' || !rawPath) {
         vscode.window.showErrorMessage(
@@ -283,8 +284,13 @@ async function executeOpenReview(args: unknown[]): Promise<void> {
         return;
     }
 
+    // Optional workspace root from MCP directive (used for files outside the workspace)
+    const workspaceRoot = typeof rawWorkspace === 'string' && rawWorkspace
+        ? rawWorkspace.replace(/\//g, path.sep)
+        : undefined;
+
     try {
-        await vscode.commands.executeCommand('reviewMode.open', fileUri);
+        await vscode.commands.executeCommand('reviewMode.open', fileUri, workspaceRoot);
         log(`Opened file in Review Mode: ${resolved}`);
     } catch (err: any) {
         vscode.window.showErrorMessage(
