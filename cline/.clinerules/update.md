@@ -1,13 +1,13 @@
 ---
-name: review
-description: Fetch the latest Review Mode annotations, implement the changes, resolve the comments, and re-open in Review Mode.
+name: update
+description: Fetch Review Mode annotations, implement changes, resolve comments, and re-open in Review Mode.
 ---
 
-# /review
+# /update
 
-**What this does:** Automatically reads the latest Review Mode annotations for a file, implements the requested changes, marks comments as resolved, and re-opens the file in Review Mode for further feedback.
+**What this does:** Reads the latest Review Mode annotations for the current file, implements requested changes, updates comment statuses, and re-opens the file in Review Mode.
 
-**When to use:** After the user has added comments in Review Mode and wants you to act on them. This is a shortcut for "read my comments, implement them, and show me the result."
+**When to use:** After the user has added comments in Review Mode and types `/update` or asks to apply their feedback.
 
 **Prerequisite:** The `review-mode` MCP server must be configured in your MCP client settings.
 
@@ -17,9 +17,9 @@ description: Fetch the latest Review Mode annotations, implement the changes, re
 
 ### Step 1 — Identify the file
 
-Determine which file to review:
+Determine which file to update:
 - If the user specifies a file path, use that.
-- If there is a plan file from a recent `/plan` workflow, use that.
+- If there is a current plan file from a recent planning interaction, use that by default.
 - If unclear, call `list_reviewed_files(workspace="/path/to/project/root")` to see all files currently under review.
 - If still unclear, ask the user.
 
