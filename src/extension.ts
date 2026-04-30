@@ -35,11 +35,21 @@ export function activate(context: vscode.ExtensionContext) {
 
     // --- Core commands ---
     context.subscriptions.push(
-        vscode.commands.registerCommand('reviewMode.open', async (uri?: vscode.Uri, workspaceRoot?: string) => {
+        vscode.commands.registerCommand('reviewMode.open', async (uri?: vscode.Uri | { fsPath?: string; path?: string }, workspaceRoot?: string) => {
+            // Normalise the URI argument — context menus, explorer, and MCP
+            // directives may pass plain objects, strings, or vscode.Uri instances
+            let fileUri: vscode.Uri | undefined;
             if (uri) {
-                await vscode.window.showTextDocument(uri);
+                if (uri instanceof vscode.Uri) {
+                    fileUri = vscode.Uri.file(uri.fsPath);
+                } else if (typeof uri === 'string') {
+                    fileUri = vscode.Uri.file(uri as string);
+                } else if (typeof uri === 'object' && typeof (uri as any).fsPath === 'string') {
+                    fileUri = vscode.Uri.file((uri as any).fsPath);
+                }
+                // else: ignore unrecognised argument shape — fall through to activeTextEditor
             }
-            await controller.open(workspaceRoot);
+            await controller.open(fileUri, workspaceRoot);
         }),
         vscode.commands.registerCommand('reviewMode.close', () => controller.close()),
     );

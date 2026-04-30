@@ -19,18 +19,28 @@ export class ReviewModeController {
         this.webview.onRevisionRequested = (originalPath: string, revision: number) => this.openRevision(originalPath, revision);
     }
 
-    /** Open the active file in review mode.
+    /** Open a file in review mode.
+     *  @param fileUri  Optional URI of the file to review. If omitted, the active
+     *         text editor is used.
      *  @param workspaceRootOverride  Optional workspace root path (e.g. from an MCP directive)
      *         used when the file lives outside the current workspace folders.
      */
-    async open(workspaceRootOverride?: string): Promise<void> {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor) {
-            vscode.window.showErrorMessage('No active file to review.');
-            return;
+    async open(fileUri?: vscode.Uri, workspaceRootOverride?: string): Promise<void> {
+        let originalUri: vscode.Uri;
+        let openedEditorForReview = false;
+
+        if (fileUri) {
+            originalUri = fileUri;
+        } else {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) {
+                vscode.window.showErrorMessage('No active file to review.');
+                return;
+            }
+            originalUri = editor.document.uri;
+            openedEditorForReview = true;
         }
 
-        const originalUri = editor.document.uri;
         const originalDir = path.dirname(originalUri.fsPath);
         const fileName = path.basename(originalUri.fsPath);
         const baseName = path.basename(fileName, path.extname(fileName));
@@ -126,8 +136,11 @@ export class ReviewModeController {
             }
         }
 
-        // Close the original editor
-        await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+        // Close the original text editor (only if we opened one — skip when
+        // the file URI was provided directly, e.g. from an MCP directive)
+        if (openedEditorForReview) {
+            await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+        }
 
         // Open the WebView with the latest snapshot
         await this.webview.show(originalUri.fsPath, snapshotPath, revisionsPath, fileName);

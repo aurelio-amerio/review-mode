@@ -23,6 +23,8 @@ The skill is **agent-agnostic** — it works regardless of how the document was 
 
 **Prerequisite:** The `review-mode` MCP server must be configured in your MCP client settings. All operations use MCP tools — no CLI scripts or direct file reads are needed.
 
+**Command trigger:** Treat `/review-mode` as an explicit user command to open the relevant Markdown plan/document in Review Mode via MCP (`open_review`), then confirm in chat that the file was created (if applicable) and opened in Review Mode.
+
 ### Tool Overview
 
 The `review-mode-mcp` server provides the following tools:
@@ -275,17 +277,3 @@ Do **NOT** rush the user into implementation. Wait for explicit confirmation.
 
 ---
 
-## Example
-
-See the `examples/` directory for a complete worked example:
-
-- **`examples/testfile.md`** — A sample markdown document (a chocolate cake recipe)
-- **`examples/.revisions/testfile_md/revisions.json`** — Revision index with two revisions
-- **`examples/.revisions/testfile_md/rev0.json`** — First revision with two annotations:
-  - One with status `"resolved"` (the title change was implemented)
-  - One with status `"open"` (requesting a description)
-- **`examples/.revisions/testfile_md/rev1.json`** — Second revision showing:
-  - The open annotation migrated forward with status `"in-progress"`
-  - An `[AGENT]` reply asking for clarification
-
-This demonstrates the full lifecycle: user comments → agent resolves some, asks about others → user responds → cycle continues.
