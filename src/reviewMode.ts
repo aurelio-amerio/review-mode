@@ -65,7 +65,7 @@ export class ReviewModeController {
         if (isExternal) {
             const normalized = originalUri.fsPath.replace(/\\/g, '/').toLowerCase();
             const shortHash = crypto.createHash('sha256').update(normalized).digest('hex').substring(0, 8);
-            folderName = `_ext_${baseName}_${shortHash}`;
+            folderName = `${baseName}_${shortHash}`;
             relativePath = originalUri.fsPath; // absolute path — stored as sourceFile
         } else {
             relativePath = path.relative(rootPath, originalUri.fsPath);
