@@ -154,7 +154,12 @@
     function showInlineCommentForm(startLine, endLine) {
         if (activeForm) { activeForm.remove(); }
 
-        const targetContainer = document.querySelector(`.line-container[data-line="${endLine}"]`);
+        let targetContainer = document.querySelector(`.line-container[data-line="${endLine}"]`);
+        // Fall back to the startLine container — needed when a multi-line block
+        // (e.g. a fenced code block) is rendered as a single line-container
+        if (!targetContainer && endLine !== startLine) {
+            targetContainer = document.querySelector(`.line-container[data-line="${startLine}"]`);
+        }
         if (!targetContainer) { return; }
 
         // Highlight the range being commented

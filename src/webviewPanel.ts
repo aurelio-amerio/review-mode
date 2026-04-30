@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { marked } from 'marked';
 import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
+import { parse as parseYaml } from 'yaml';
 import { AnnotationStore } from './annotationStore';
 
 // Map file extensions to Shiki language IDs
@@ -252,10 +253,130 @@ export class ReviewWebviewPanel {
 </html>`;
     }
 
+    /** Detect YAML frontmatter (--- delimited) and return parsed data + body start line + todo line mappings. */
+    private parseFrontmatter(sourceLines: string[]): {
+        frontmatter: any | null;
+        bodyStartIndex: number;
+        todoLineRanges: Array<{ startLine: number; endLine: number }>;
+    } {
+        if (sourceLines.length === 0 || sourceLines[0].trim() !== '---') {
+            return { frontmatter: null, bodyStartIndex: 0, todoLineRanges: [] };
+        }
+
+        // Find closing ---
+        let closingIndex = -1;
+        for (let i = 1; i < sourceLines.length; i++) {
+            if (sourceLines[i].trim() === '---') {
+                closingIndex = i;
+                break;
+            }
+        }
+
+        if (closingIndex === -1) {
+            return { frontmatter: null, bodyStartIndex: 0, todoLineRanges: [] };
+        }
+
+        const yamlContent = sourceLines.slice(1, closingIndex).join('\n');
+        try {
+            const parsed = parseYaml(yamlContent);
+
+            // Find line ranges for each todo entry within the frontmatter.
+            // Todo list items start with `  - ` (a YAML sequence entry under `todos:`).
+            const todoLineRanges: Array<{ startLine: number; endLine: number }> = [];
+            if (parsed?.todos && Array.isArray(parsed.todos)) {
+                // Scan frontmatter lines (between the --- delimiters) for list entries
+                // under the todos key. Each `  - ` at the todos indent level starts a new todo.
+                const fmStart = 1; // first line after opening ---
+                let inTodos = false;
+                let todosIndent = -1;
+                let currentTodoStart = -1;
+
+                for (let li = fmStart; li < closingIndex; li++) {
+                    const line = sourceLines[li];
+                    const trimmed = line.trimStart();
+                    const indent = line.length - trimmed.length;
+
+                    // Detect the `todos:` key
+                    if (trimmed.startsWith('todos:')) {
+                        inTodos = true;
+                        todosIndent = indent;
+                        continue;
+                    }
+
+                    // If we're past the todos block (another top-level key)
+                    if (inTodos && indent <= todosIndent && trimmed.length > 0 && !trimmed.startsWith('-')) {
+                        // Close last open todo
+                        if (currentTodoStart !== -1) {
+                            todoLineRanges.push({ startLine: currentTodoStart + 1, endLine: li });
+                            currentTodoStart = -1;
+                        }
+                        inTodos = false;
+                        continue;
+                    }
+
+                    if (inTodos && trimmed.startsWith('- ')) {
+                        // Close previous todo entry
+                        if (currentTodoStart !== -1) {
+                            todoLineRanges.push({ startLine: currentTodoStart + 1, endLine: li });
+                        }
+                        currentTodoStart = li;
+                    }
+                }
+                // Close final todo entry
+                if (currentTodoStart !== -1) {
+                    todoLineRanges.push({ startLine: currentTodoStart + 1, endLine: closingIndex });
+                }
+            }
+
+            return { frontmatter: parsed, bodyStartIndex: closingIndex + 1, todoLineRanges };
+        } catch {
+            return { frontmatter: null, bodyStartIndex: 0, todoLineRanges: [] };
+        }
+    }
+
+    /** Render the interactive todos section from frontmatter data with annotatable line containers. */
+    private renderTodosSection(
+        todos: Array<{ id?: string; content: string; status?: string }>,
+        todoLineRanges: Array<{ startLine: number; endLine: number }>,
+    ): string {
+        const count = todos.length;
+        let html = `<div class="todos-section">
+    <div class="todos-header">
+        <span class="todos-count">${count} To-do${count !== 1 ? 's' : ''}</span>
+    </div>
+    <div class="todos-list">\n`;
+
+        for (let ti = 0; ti < todos.length; ti++) {
+            const todo = todos[ti];
+            const isDone = todo.status === 'done' || todo.status === 'completed';
+            const escapedContent = this.escapeHtml(todo.content);
+            // Map to source line if available
+            const lineRange = todoLineRanges[ti];
+            const dataLine = lineRange ? lineRange.startLine : 0;
+            const dataEndLine = lineRange ? lineRange.endLine : dataLine;
+
+            html += `<div class="line-container todo-item${isDone ? ' todo-done' : ''}" data-line="${dataLine}" data-end-line="${dataEndLine}">
+    <div class="line-gutter">
+        <span class="line-number">${dataLine}</span>
+        <button class="add-note-btn" data-line="${dataLine}" title="Add comment"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3l3 3 3-3h3a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm0 9h-3.5L8 12.5 5.5 10H2V2h12v8z"/><path d="M7.25 4v2.25H5v1.5h2.25V10h1.5V7.75H11v-1.5H8.75V4z"/></svg></button>
+    </div>
+    <div class="line-content todo-content">
+        <span class="todo-checkbox${isDone ? ' checked' : ''}"></span>
+        <span class="todo-text">${escapedContent}</span>
+    </div>
+</div>\n`;
+        }
+
+        html += `    </div>\n</div>\n`;
+        return html;
+    }
+
     /** Render full markdown as a document, grouping source lines into blocks with annotation anchors. */
     private renderMarkdownDocument(content: string, sourceLines: string[]): string {
-        // Parse the full markdown into HTML
-        const fullHtml = marked.parse(content) as string;
+        // Detect and parse YAML frontmatter
+        const { frontmatter, bodyStartIndex, todoLineRanges } = this.parseFrontmatter(sourceLines);
+        const todos: Array<{ id?: string; content: string; status?: string }> | null =
+            frontmatter?.todos && Array.isArray(frontmatter.todos) ? frontmatter.todos : null;
 
         // Build a mapping: for each source line, determine if it starts a block.
         // We wrap each source-line-range in a line-container for annotation + "+" button.
@@ -264,17 +385,27 @@ export class ReviewWebviewPanel {
         const isListItem = (line: string) => /^\s*[-*+]\s/.test(line) || /^\s*\d+\.\s/.test(line);
         const isHeading = (line: string) => /^#{1,6}\s/.test(line);
 
-        const blocks: { startLine: number; endLine: number; }[] = [];
+        const blocks: { startLine: number; endLine: number; isFrontmatter: boolean }[] = [];
         let i = 0;
+
+        // If we have frontmatter, group all frontmatter lines as hidden blocks
+        if (bodyStartIndex > 0) {
+            // Each frontmatter line gets its own hidden block (preserving line numbers for annotations)
+            for (let fi = 0; fi < bodyStartIndex; fi++) {
+                blocks.push({ startLine: fi + 1, endLine: fi + 1, isFrontmatter: true });
+            }
+            i = bodyStartIndex;
+        }
+
         while (i < sourceLines.length) {
             const line = sourceLines[i];
             if (line.trim() === '') {
                 // Empty line gets its own (collapsed) block
-                blocks.push({ startLine: i + 1, endLine: i + 1 });
+                blocks.push({ startLine: i + 1, endLine: i + 1, isFrontmatter: false });
                 i++;
             } else if (isHeading(line) || isListItem(line)) {
                 // Headings and list items are always their own block (individually annotatable)
-                blocks.push({ startLine: i + 1, endLine: i + 1 });
+                blocks.push({ startLine: i + 1, endLine: i + 1, isFrontmatter: false });
                 i++;
             } else {
                 // Non-empty, non-heading, non-list: accumulate consecutive lines as one block
@@ -284,13 +415,24 @@ export class ReviewWebviewPanel {
                 while (i < sourceLines.length && sourceLines[i].trim() !== '' && !isHeading(sourceLines[i]) && !isListItem(sourceLines[i])) {
                     i++;
                 }
-                blocks.push({ startLine: start + 1, endLine: i });
+                blocks.push({ startLine: start + 1, endLine: i, isFrontmatter: false });
             }
         }
 
         // Now render each block: parse the block's source lines as markdown
         let result = '';
         for (const block of blocks) {
+            // Frontmatter lines are rendered as hidden containers (still carry data-line for annotations)
+            if (block.isFrontmatter) {
+                result += `<div class="line-container frontmatter-line" data-line="${block.startLine}" style="display:none;">
+    <div class="line-gutter">
+        <span class="line-number">${block.startLine}</span>
+    </div>
+    <div class="line-content">&nbsp;</div>
+</div>\n`;
+                continue;
+            }
+
             const blockLines = sourceLines.slice(block.startLine - 1, block.endLine);
             const blockText = blockLines.join('\n');
 
@@ -330,6 +472,12 @@ export class ReviewWebviewPanel {
 </div>\n`;
             }
         }
+
+        // Append todos section at the end if present in frontmatter
+        if (todos && todos.length > 0) {
+            result += this.renderTodosSection(todos, todoLineRanges);
+        }
+
         return result;
     }
 
