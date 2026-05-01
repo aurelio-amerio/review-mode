@@ -63,9 +63,21 @@ Add the following JSON configuration to your MCP settings to manually install th
 
 ### Agent Configuration
 
-- **Cline**: The `.clinerules` file at the project root automatically triggers the Review Mode workflow when Cline writes an implementation plan. No additional setup needed.
-- **VS Code Copilot**: Point Copilot to the skill file in your instructions or workspace settings: `When writing implementation plans, follow the review-mode skill at .cline/skills/review-mode/SKILL.md`
-- **Other AI Agents**: Reference the skill file directly. The skill at `.cline/skills/review-mode/SKILL.md` contains complete, agent-agnostic instructions that any AI can follow.
+The MCP server can install the agent-specific rules and skills for you. Run the install command from your project root:
+
+```bash
+# For Cursor
+review-mode-mcp install cursor
+
+# For Cline
+review-mode-mcp install cline
+```
+
+This copies the appropriate configuration files into your working directory, giving your AI agent the instructions it needs to use the Review Mode workflow automatically.
+
+- **Cursor**: Installs rules and skills into `.cursor/rules/` and `.cursor/skills/`.
+- **Cline**: Installs rules into `.clinerules/` and skills into `.cline/skills/`.
+- **Other AI Agents**: Reference the skill file directly after installing for either Cursor or Cline — the skills contain agent-agnostic instructions that any AI can follow.
 
 ## Review Mode Controls
 
