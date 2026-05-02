@@ -6,6 +6,8 @@ import { SidebarProvider } from './sidebarProvider';
 import { ReviewModeUriHandler } from './uriHandler';
 import { ReviewedFilesProvider, ReviewedFileItem } from './reviewedFilesProvider';
 import { startDirectiveWatcher } from './directiveWatcher';
+import { registerVscodeMcpProvider } from './mcpProvider';
+import { registerInstallCommands, getInstalledVersion } from './installSkills';
 import * as fs from 'fs';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -32,6 +34,15 @@ export function activate(context: vscode.ExtensionContext) {
 
     // --- Chat participant (@review-mode /review) ---
     registerChatParticipant(context);
+
+    // --- External MCP server provider (VS Code Copilot Agent Mode) ---
+    context.subscriptions.push(registerVscodeMcpProvider(context));
+
+    // --- Install Cline/Cursor/VS Code skills commands ---
+    registerInstallCommands(context);
+
+    // --- Version-aware activation prompt ---
+    showVersionAwarePrompt(context);
 
     // --- Core commands ---
     context.subscriptions.push(
@@ -154,3 +165,43 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() { }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Version-aware activation prompt
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Show a prompt once per extension version change asking the user to install
+ * or update their agent skills.  "Skip This Version" suppresses the prompt
+ * until the next extension update.
+ */
+function showVersionAwarePrompt(context: vscode.ExtensionContext): void {
+    const currentVersion: string = context.extension.packageJSON.version;
+    const installedVersion = getInstalledVersion(context);
+
+    if (installedVersion === currentVersion) {
+        // Skills already up-to-date for this version — stay quiet
+        return;
+    }
+
+    const isFirstInstall = !installedVersion;
+    const message = isFirstInstall
+        ? 'Review Mode can integrate with AI agents (Cursor, Cline, VS Code Copilot). Set up skills and MCP tools for your editor?'
+        : `Review Mode has been updated to v${currentVersion}. Update your agent skills to get the latest features.`;
+
+    const actionLabel = isFirstInstall ? 'Set Up' : 'Update';
+
+    vscode.window.showInformationMessage(message, actionLabel, 'Skip This Version')
+        .then(async choice => {
+            if (choice === actionLabel) {
+                // Delay execution slightly to prevent the closing notification from stealing focus 
+                // and immediately closing the subsequent QuickPick menu.
+                setTimeout(() => {
+                    vscode.commands.executeCommand('reviewMode.installSkills');
+                }, 100);
+            } else if (choice === 'Skip This Version') {
+                // Record current version so we don't nag again until next update
+                await context.globalState.update('lastInstalledSkillsVersion', currentVersion);
+            }
+        });
+}

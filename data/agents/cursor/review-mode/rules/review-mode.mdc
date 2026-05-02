@@ -1,0 +1,43 @@
+---
+name: review-mode
+description: Open a Markdown file in Review Mode for annotation-based feedback.
+alwaysApply: true
+---
+
+# /review-mode
+
+**What this does:** Opens the current plan or a specified Markdown file in Review Mode so the user can annotate it with inline comments.
+
+**When to use:** When the user explicitly types `/review-mode` or asks to open a file in Review Mode.
+
+**Prerequisites:**
+- The [Review Mode](https://marketplace.visualstudio.com/items?itemName=aurelio-amerio.review-mode) VS Code extension must be installed.
+- The `review-mode` MCP server must be configured in your MCP client settings.
+
+---
+
+## Workflow Steps
+
+### Step 1 — Identify the file
+
+Determine which file to open:
+- If the user specifies a file path, use that.
+- If there is a current plan file from a recent planning interaction, use that.
+- If unclear, ask the user.
+
+### Step 2 — Open in Review Mode
+
+Use the `open_review` MCP tool:
+```python
+open_review(
+  file_path="relative/path/to/file.md",
+  workspace="/path/to/project/root"
+)
+```
+
+### Step 3 — Confirm
+
+Print a brief status message:
+> 📋 The file has been opened in Review Mode. Add your comments, then type `/update` when you're ready for me to act on them.
+
+Do **NOT** print the file content in chat. The user will read it in the Review Mode panel.

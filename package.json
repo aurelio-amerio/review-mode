@@ -3,7 +3,7 @@
   "publisher": "aurelio-amerio",
   "displayName": "Review Mode",
   "description": "A comprehensive review tool for Markdown that allows adding threaded annotations, tracking revisions, and managing comments.",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "icon": "media/icon.png",
   "author": "aurelio-amerio",
   "license": "MIT",
@@ -19,7 +19,7 @@
     "url": "https://github.com/aurelio-amerio/review-mode"
   },
   "engines": {
-    "vscode": "^1.93.0"
+    "vscode": "^1.101.0"
   },
   "categories": [
     "Other"
@@ -30,6 +30,12 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "reviewModeMcp",
+        "label": "Review Mode MCP Server"
+      }
+    ],
     "configuration": {
       "title": "Review Mode",
       "properties": {
@@ -96,6 +102,23 @@
         "command": "reviewMode.deleteReviews",
         "title": "Delete Revisions",
         "icon": "$(trash)"
+      },
+      {
+        "command": "reviewMode.installSkills",
+        "title": "Review Mode: Install Skills",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "reviewMode.installClineSkills",
+        "title": "Review Mode: Install Cline Skills"
+      },
+      {
+        "command": "reviewMode.installCursorSkills",
+        "title": "Review Mode: Install Cursor Skills"
+      },
+      {
+        "command": "reviewMode.installVscodeSkills",
+        "title": "Review Mode: Install VS Code Skills"
       }
     ],
     "viewsContainers": {
@@ -124,6 +147,11 @@
       "view/title": [
         {
           "command": "reviewMode.refreshFiles",
+          "when": "view == reviewModeFiles",
+          "group": "navigation"
+        },
+        {
+          "command": "reviewMode.installSkills",
           "when": "view == reviewModeFiles",
           "group": "navigation"
         }
@@ -171,13 +199,16 @@
     "compile": "npm run check-types && node esbuild.js",
     "check-types": "tsc --noEmit",
     "watch": "node esbuild.js --watch",
-    "package": "npm run check-types && node esbuild.js --production"
+    "package": "npm run check-types && node esbuild.js --production",
+    "download-api": "npx @vscode/dts main",
+    "postinstall": "npm run download-api"
   },
+  "dependencies": {},
   "devDependencies": {
     "@types/diff": "^7.0.0",
     "@types/node": "^20.0.0",
-    "@types/vscode": "^1.93.0",
     "@vscode/codicons": "^0.0.45",
+    "@vscode/dts": "^0.4.1",
     "diff": "^7.0.0",
     "esbuild": "^0.28.0",
     "marked": "^12.0.0",

@@ -10,3 +10,4 @@ esbuild.js
 .github/**
 .revisions/**
 test_directive.json
+vscode.d.ts

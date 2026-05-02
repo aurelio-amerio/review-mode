@@ -3,30 +3,6 @@ const esbuild = require('esbuild');
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
 
-async function main() {
-    const ctx = await esbuild.context({
-        entryPoints: ['src/extension.ts'],
-        bundle: true,
-        format: 'cjs',
-        minify: production,
-        sourcemap: !production,
-        sourcesContent: false,
-        platform: 'node',
-        outfile: 'dist/extension.js',
-        external: ['vscode'],
-        logLevel: 'silent',
-        plugins: [
-            esbuildProblemMatcherPlugin,
-        ],
-    });
-    if (watch) {
-        await ctx.watch();
-    } else {
-        await ctx.rebuild();
-        await ctx.dispose();
-    }
-}
-
 /**
  * @type {import('esbuild').Plugin}
  */
@@ -45,6 +21,37 @@ const esbuildProblemMatcherPlugin = {
         });
     },
 };
+
+/** Shared esbuild options */
+const commonOptions = {
+    bundle: true,
+    format: 'cjs',
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: 'node',
+    logLevel: 'silent',
+    plugins: [
+        esbuildProblemMatcherPlugin,
+    ],
+};
+
+async function main() {
+    // --- Extension bundle (runs inside VS Code extension host) ---
+    const extCtx = await esbuild.context({
+        ...commonOptions,
+        entryPoints: ['src/extension.ts'],
+        outfile: 'dist/extension.js',
+        external: ['vscode'],
+    });
+
+    if (watch) {
+        await extCtx.watch();
+    } else {
+        await extCtx.rebuild();
+        await extCtx.dispose();
+    }
+}
 
 main().catch(e => {
     console.error(e);
