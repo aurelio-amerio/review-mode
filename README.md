@@ -39,17 +39,47 @@ AI writes plan → Opens in Review Mode → You annotate → AI reads feedback �
 
 ## Setting Up with Your AI Tool
 
-### MCP Server Integration
+### One-Click Install
 
-To allow AI agents to access the products produced by the review mode extension and open files in review mode automatically, you must install the Review Mode MCP server.
+The extension includes a unified **Install Skills** command that sets up everything you need — the MCP server, agent workflows, and editor-specific configuration — in a single step.
 
-Install the MCP server using `uv`:
+1. Open the Command Palette (`Ctrl+Shift+P`) and run **Review Mode: Install Skills**, or click the ⬇ icon in the Review Mode sidebar panel.
+2. Pick your editor: **Cline**, **Cursor**, or **VS Code (Copilot)**.
+3. The extension will:
+   - Install (or upgrade) the `review-mode-mcp` server via [`uv tool`](https://docs.astral.sh/uv/)
+   - Copy the appropriate agent workflows and skills into the correct locations
+   - Register the MCP server in your editor's configuration
+
+> **Prerequisite:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) must be installed and available on your PATH.
+
+When you update the extension, you'll be prompted to re-run Install Skills so your agent files stay in sync.
+
+### What Gets Installed
+
+| Editor | MCP server | Workflows & skills | MCP config |
+|--------|-----------|-------------------|------------|
+| **Cursor** | `uv tool install review-mode-mcp` | Copied to `~/.cursor/plugins/local/review-mode/` (rules + skills + `mcp.json`) | Bundled in the plugin directory |
+| **Cline** | `uv tool install review-mode-mcp` | Copied into the workspace (`.clinerules/workflows/`, `.cline/skills/`) | Auto-added to Cline's `cline_mcp_settings.json` |
+| **VS Code (Copilot)** | `uv tool install review-mode-mcp` | Provided by the extension's built-in MCP definition provider | Registered automatically via VS Code's MCP API |
+
+### Agent Workflows
+
+After installation, your AI agent gains two slash-command workflows:
+
+| Command | What it does |
+|---------|-------------|
+| `/review-mode` | Opens the current plan (or a specified file) in Review Mode so you can annotate it with inline comments. |
+| `/update-plan` | Reads your annotations, implements the requested changes, resolves comments, and re-opens the file for another review round. |
+
+These workflows are installed as Cursor rules (`.mdc` files) or Cline workflow rules (`.md` files), and they teach the agent the full review loop automatically.
+
+### Manual MCP Configuration
+
+If you prefer to configure the MCP server manually instead of using Install Skills, install it with `uv` and add the JSON block to your MCP settings:
 
 ```bash
 uv tool install review-mode-mcp
 ```
-
-Add the following JSON configuration to your MCP settings to manually install the server:
 
 ```json
 {
@@ -60,24 +90,6 @@ Add the following JSON configuration to your MCP settings to manually install th
   }
 }
 ```
-
-### Agent Configuration
-
-The MCP server can install the agent-specific rules and skills for you. Run the install command from your project root:
-
-```bash
-# For Cursor
-review-mode-mcp install cursor
-
-# For Cline
-review-mode-mcp install cline
-```
-
-This copies the appropriate configuration files into your working directory, giving your AI agent the instructions it needs to use the Review Mode workflow automatically.
-
-- **Cursor**: Installs rules and skills into `.cursor/rules/` and `.cursor/skills/`.
-- **Cline**: Installs rules into `.clinerules/` and skills into `.cline/skills/`.
-- **Other AI Agents**: Reference the skill file directly after installing for either Cursor or Cline — the skills contain agent-agnostic instructions that any AI can follow.
 
 ## Review Mode Controls
 
