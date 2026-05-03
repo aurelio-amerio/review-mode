@@ -119,6 +119,10 @@
       {
         "command": "reviewMode.installVscodeSkills",
         "title": "Review Mode: Install VS Code Skills"
+      },
+      {
+        "command": "reviewMode.installAntigravitySkills",
+        "title": "Review Mode: Install Antigravity Skills"
       }
     ],
     "viewsContainers": {

@@ -19,7 +19,7 @@ import * as os from 'os';
 
 const INSTALLED_VERSION_KEY = 'lastInstalledSkillsVersion';
 
-type EditorTarget = 'cline' | 'cursor' | 'vscode';
+type EditorTarget = 'cline' | 'cursor' | 'vscode' | 'antigravity';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Public registration
@@ -38,6 +38,9 @@ export function registerInstallCommands(context: vscode.ExtensionContext): void 
         ),
         vscode.commands.registerCommand('reviewMode.installVscodeSkills', () =>
             installForEditor(context, 'vscode'),
+        ),
+        vscode.commands.registerCommand('reviewMode.installAntigravitySkills', () =>
+            installForEditor(context, 'antigravity'),
         ),
     );
 }
@@ -75,6 +78,15 @@ async function installSkillsUnified(context: vscode.ExtensionContext): Promise<v
                 dark: vscode.Uri.file(context.asAbsolutePath('media/logos/copilot_dark.svg'))
             }
         },
+        {
+            label: 'Antigravity',
+            description: 'Install review-mode-mcp via uv and copy workflows & skills for Antigravity',
+            detail: 'Requires uv on PATH',
+            iconPath: {
+                light: vscode.Uri.file(context.asAbsolutePath('media/logos/antigravity_light.svg')),
+                dark: vscode.Uri.file(context.asAbsolutePath('media/logos/antigravity_dark.svg'))
+            }
+        },
     ];
 
     const picked = await vscode.window.showQuickPick(items, {
@@ -89,6 +101,7 @@ async function installSkillsUnified(context: vscode.ExtensionContext): Promise<v
         'Cline': 'cline',
         'Cursor': 'cursor',
         'VS Code (Copilot)': 'vscode',
+        'Antigravity': 'antigravity',
     };
 
     const target = editorMap[picked.label];
@@ -114,6 +127,9 @@ async function installForEditor(
             break;
         case 'vscode':
             await installVscode(context);
+            break;
+        case 'antigravity':
+            await installAntigravity(context);
             break;
     }
 }
@@ -398,4 +414,76 @@ async function saveInstalledVersion(context: vscode.ExtensionContext): Promise<v
 /** Read the last installed version from globalState. */
 export function getInstalledVersion(context: vscode.ExtensionContext): string | undefined {
     return context.globalState.get<string>(INSTALLED_VERSION_KEY);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Antigravity install
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function installAntigravity(context: vscode.ExtensionContext): Promise<void> {
+    // 1. Check uv
+    if (!await checkUvInstalled()) { return; }
+
+    // 2. Install / upgrade review-mode-mcp
+    const mcpOk = await installOrUpgradeMcpServer();
+    if (!mcpOk) { return; }
+
+    // 3. Pick workspace root and copy files
+    const destRoot = await pickWorkspaceRoot('Antigravity');
+    if (!destRoot) { return; }
+
+    const sourceRoot = path.join(context.extensionPath, 'data', 'agents', 'antigravity');
+    if (!fs.existsSync(sourceRoot)) {
+        vscode.window.showErrorMessage(
+            "Review Mode: Antigravity agent data not found. The extension may be corrupted.",
+        );
+        return;
+    }
+
+    try {
+        copyDirRecursive(sourceRoot, destRoot);
+        await updateAntigravityMcpSettings();
+        await saveInstalledVersion(context);
+        vscode.window.showInformationMessage(
+            'Review Mode: MCP server and Antigravity workflows installed successfully.',
+        );
+    } catch (err: any) {
+        vscode.window.showErrorMessage(`Review Mode: Failed to install Antigravity skills — ${err.message}`);
+    }
+}
+
+async function updateAntigravityMcpSettings(): Promise<void> {
+    const configPath = path.join(os.homedir(), '.gemini', 'antigravity', 'mcp_config.json');
+    const configDir = path.dirname(configPath);
+
+    if (!fs.existsSync(configDir)) {
+        fs.mkdirSync(configDir, { recursive: true });
+    }
+
+    let settings: any = { mcpServers: {} };
+    if (fs.existsSync(configPath)) {
+        try {
+            const content = fs.readFileSync(configPath, 'utf8');
+            settings = JSON.parse(content);
+            if (!settings.mcpServers) {
+                settings.mcpServers = {};
+            }
+        } catch (err) {
+            console.warn(`Review Mode: Failed to parse ${configPath}, initializing empty settings`);
+            settings = { mcpServers: {} };
+        }
+    }
+
+    if (!settings.mcpServers['review-mode-mcp']) {
+        settings.mcpServers['review-mode-mcp'] = {
+            command: "review-mode-mcp",
+            args: []
+        };
+
+        try {
+            fs.writeFileSync(configPath, JSON.stringify(settings, null, 2), 'utf8');
+        } catch (err) {
+            console.error(`Review Mode: Failed to update ${configPath}`, err);
+        }
+    }
 }
