@@ -199,12 +199,22 @@
         const submit = () => {
             const text = input.value.trim();
             if (text) {
-                vscode.postMessage({
+                const message = {
                     type: 'addNote',
                     startLine: startLine,
                     endLine: endLine,
                     text: text,
-                });
+                };
+
+                if (diffModeEnabled && currentDiffHunks) {
+                    const context = extractDiffContextFromHunks(currentDiffHunks, startLine, endLine);
+                    if (context) {
+                        message.previousVersionContext = context.previousVersionContext;
+                        message.currentVersionContext = context.currentVersionContext;
+                    }
+                }
+
+                vscode.postMessage(message);
             }
             form.remove();
             activeForm = null;
@@ -317,6 +327,66 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    function extractDiffContextFromHunks(hunks, lineStart, lineEnd) {
+        const contextSize = 3;
+        let currentLine = 0;
+        const rows = [];
+
+        for (const hunk of hunks) {
+            for (const line of hunk.lines) {
+                if (hunk.type === 'removed') {
+                    rows.push({ type: 'removed', text: line, currentLine: null });
+                } else {
+                    currentLine++;
+                    rows.push({ type: hunk.type, text: line, currentLine: currentLine });
+                }
+            }
+        }
+
+        let firstIdx = -1;
+        let lastIdx = -1;
+        for (let i = 0; i < rows.length; i++) {
+            const r = rows[i];
+            if (r.currentLine !== null && r.currentLine >= lineStart && r.currentLine <= lineEnd) {
+                if (firstIdx === -1) { firstIdx = i; }
+                lastIdx = i;
+            }
+        }
+
+        if (firstIdx === -1) { return null; }
+
+        while (firstIdx > 0 && rows[firstIdx - 1].type === 'removed') { firstIdx--; }
+        while (lastIdx < rows.length - 1 && rows[lastIdx + 1].type === 'removed') { lastIdx++; }
+
+        let hasChange = false;
+        for (let i = firstIdx; i <= lastIdx; i++) {
+            if (rows[i].type !== 'unchanged') { hasChange = true; break; }
+        }
+        if (!hasChange) { return null; }
+
+        const start = Math.max(0, firstIdx - contextSize);
+        const end = Math.min(rows.length - 1, lastIdx + contextSize);
+
+        const prevLines = [];
+        const currLines = [];
+        for (let i = start; i <= end; i++) {
+            const r = rows[i];
+            if (r.type === 'removed') {
+                prevLines.push('-' + r.text);
+            } else if (r.type === 'added') {
+                currLines.push('+' + r.text);
+            } else {
+                prevLines.push(' ' + r.text);
+                currLines.push(' ' + r.text);
+            }
+        }
+
+        return {
+            previousVersionContext: prevLines.join('\n'),
+            currentVersionContext: currLines.join('\n'),
+        };
     }
 
     // --- Comment pane event delegation ---
