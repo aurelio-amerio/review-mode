@@ -1,8 +1,0 @@
-{
-    "_ui_directive": true,
-    "command_id": "reviewMode.open",
-    "args": [
-        "README.md",
-        "/home/aure/github/review-mode"
-    ]
-}
