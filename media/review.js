@@ -32,6 +32,8 @@
     let pinnedGitCommitHash = null;
     /** @type {boolean} */
     let hasWorkingCopy = false;
+    /** @type {boolean} */
+    let isGitAvailable = false;
 
     // --- Tab switching & State ---
     function activateTab(tabId) {
@@ -70,10 +72,30 @@
         if (!toggle) { return; }
 
         diffModeEnabled = !diffModeEnabled;
-        if (!diffModeEnabled) { activeDiffBase = null; }
+        if (!diffModeEnabled) {
+            activeDiffBase = null;
+            // Force back to local mode (UI-only — persisted state preserved by extension)
+            historyMode = 'local';
+            const localBtn = document.getElementById('history-mode-local');
+            const gitBtn = document.getElementById('history-mode-git');
+            if (localBtn) { localBtn.classList.add('active'); }
+            if (gitBtn) {
+                gitBtn.classList.remove('active');
+                gitBtn.disabled = true;
+                gitBtn.classList.add('disabled');
+            }
+            vscode.postMessage({ type: 'switchHistoryMode', mode: 'local' });
+        } else {
+            // Re-enable Git button if available (actual mode restore handled by restoreDiffState message)
+            const gitBtn = document.getElementById('history-mode-git');
+            if (gitBtn && isGitAvailable) {
+                gitBtn.disabled = false;
+                gitBtn.classList.remove('disabled');
+            }
+        }
         toggle.setAttribute('aria-checked', String(diffModeEnabled));
         vscode.postMessage({ type: 'toggleDiffMode', enabled: diffModeEnabled });
-        if (lastRevisions) { renderHistoryPane(lastRevisions, lastCurrentRevision); }
+        // Don't re-render here — the extension will send restoreDiffState (when ON) or updateHistory (when OFF)
     });
 
     // --- History mode (Local / Git) toggle ---
@@ -628,10 +650,14 @@
             document.getElementById('diff-mode-toggle')?.setAttribute('aria-checked', 'false');
         }
         if (msg.type === 'setGitAvailable') {
+            isGitAvailable = !!msg.available;
             const gitBtn = document.getElementById('history-mode-git');
             if (gitBtn && msg.available) {
-                gitBtn.disabled = false;
-                gitBtn.classList.remove('disabled');
+                // Only enable when diff mode is on
+                if (diffModeEnabled) {
+                    gitBtn.disabled = false;
+                    gitBtn.classList.remove('disabled');
+                }
                 gitBtn.title = 'Show Git commit history';
             }
         }
@@ -646,6 +672,33 @@
             gitHistory = gitHistory.concat(msg.commits || []);
             hasMoreGitCommits = !!msg.hasMore;
             renderGitHistoryPane();
+        }
+        if (msg.type === 'restoreDiffState') {
+            // Extension tells us to restore mode + pin state when diff is toggled on
+            historyMode = msg.mode || 'local';
+            if (msg.pinnedRevision !== undefined && msg.pinnedRevision !== null) {
+                pinnedRevision = msg.pinnedRevision;
+            }
+            if (msg.pinnedGitCommitHash !== undefined) {
+                pinnedGitCommitHash = msg.pinnedGitCommitHash;
+            }
+            // Update segmented buttons
+            const localBtn = document.getElementById('history-mode-local');
+            const gitBtn = document.getElementById('history-mode-git');
+            if (localBtn) { localBtn.classList.toggle('active', historyMode === 'local'); }
+            if (gitBtn) {
+                gitBtn.classList.toggle('active', historyMode === 'git');
+                // Ensure git button is enabled if available and diff is on
+                if (msg.isGitAvailable && diffModeEnabled) {
+                    gitBtn.disabled = false;
+                    gitBtn.classList.remove('disabled');
+                }
+            }
+            // Render the correct history tab
+            if (historyMode === 'local' && lastRevisions) {
+                renderHistoryPane(lastRevisions, lastCurrentRevision);
+            }
+            // Git history is rendered via updateGitHistory message triggered by extension
         }
     });
 
@@ -687,17 +740,21 @@
             item.className = itemClass;
             item.dataset.revision = String(rev.revision);
 
-            // Column 2: pin button for non-latest, "current" badge for latest
-            const col2Html = isLatest
-                ? '<span class="history-current-badge">now</span>'
-                : `<button class="pin-btn${isPinned ? ' pinned' : ''}" data-pin-revision="${rev.revision}" title="Set as diff base"><span class="codicon codicon-pin"></span></button>`;
-
             const countHtml = rev.totalCount === 0 ? '0' : `${rev.addressedCount}/${rev.totalCount}`;
+
+            // Last column: CURRENT badge for latest, pin button for others (only in diff mode), empty otherwise
+            let lastColHtml = '';
+            if (isLatest) {
+                lastColHtml = '<span class="history-current-badge">current</span>';
+            } else if (diffModeEnabled) {
+                lastColHtml = `<button class="pin-btn${isPinned ? ' pinned' : ''}" data-pin-revision="${rev.revision}" title="Set as diff base"><span class="codicon codicon-pin"></span></button>`;
+            }
+
             item.innerHTML = `
                 <span class="history-rev">rev${rev.revision}</span>
-                ${col2Html}
                 <span class="history-date">${dateStr}</span>
                 <span class="history-count${rev.totalCount > 0 && rev.addressedCount === rev.totalCount ? ' all-addressed' : ''}">${countHtml}</span>
+                <span class="history-last-col">${lastColHtml}</span>
             `;
             pane.appendChild(item);
         }
@@ -726,7 +783,7 @@
 
             if (diffModeEnabled) {
                 if (revision === latestRevision) {
-                    // Clicking "now" while in diff mode: no-op, keep current diff base
+                    // Clicking "current" while in diff mode: no-op, keep current diff base
                     return;
                 }
                 // In diff mode: temporarily preview diff from this revision (without changing the pin)
@@ -757,7 +814,7 @@
                 <span class="git-hash">(changes)</span>
                 <span class="git-message">Uncommitted changes</span>
                 <span class="git-date">now</span>
-                <span class="history-current-badge">now</span>
+                <span class="history-last-col"><span class="history-current-badge">current</span></span>
             </div>`;
         } else if (gitHistory.length > 0) {
             // Latest commit is the target when there are no working copy changes
@@ -766,7 +823,7 @@
                 <span class="git-hash">${escapeHtml(latest.shortHash)}</span>
                 <span class="git-message" title="${escapeHtml(latest.message)}">${escapeHtml(latest.message)}</span>
                 <span class="git-date">${escapeHtml(latest.relativeDate)}</span>
-                <span class="history-current-badge">now</span>
+                <span class="history-last-col"><span class="history-current-badge">current</span></span>
             </div>`;
         }
 
@@ -776,13 +833,20 @@
             const commit = gitHistory[i];
             const isPinned = commit.hash === pinnedGitCommitHash;
             const baseClass = diffModeEnabled && isPinned ? ' diff-base' : '';
+
+            // Last column: pin button only in diff mode
+            let lastColHtml = '';
+            if (diffModeEnabled) {
+                lastColHtml = `<button class="pin-btn${isPinned ? ' pinned' : ''}" data-pin-commit="${escapeHtml(commit.hash)}" title="Set as diff base">
+                    <span class="codicon codicon-pin"></span>
+                </button>`;
+            }
+
             html += `<div class="history-item git-item${baseClass}" data-commit-hash="${escapeHtml(commit.hash)}">
                 <span class="git-hash">${escapeHtml(commit.shortHash)}</span>
                 <span class="git-message" title="${escapeHtml(commit.message)}">${escapeHtml(commit.message)}</span>
                 <span class="git-date">${escapeHtml(commit.relativeDate)}</span>
-                <button class="pin-btn${isPinned ? ' pinned' : ''}" data-pin-commit="${escapeHtml(commit.hash)}" title="Set as diff base">
-                    <span class="codicon codicon-pin"></span>
-                </button>
+                <span class="history-last-col">${lastColHtml}</span>
             </div>`;
         }
 
@@ -807,6 +871,21 @@
                 vscode.postMessage({ type: 'pinGitCommit', commitHash });
                 renderGitHistoryPane();
                 return;
+            }
+
+            // Row click — preview diff without pinning (like local mode)
+            if (diffModeEnabled) {
+                const item = e.target.closest('.history-item.git-item');
+                if (item && !item.classList.contains('diff-current') && !e.target.closest('.load-more-btn')) {
+                    const commitHash = item.dataset.commitHash;
+                    if (commitHash) {
+                        // Visually mark as temporary diff-base
+                        freshPane.querySelectorAll('.history-item.git-item.diff-base').forEach(el => el.classList.remove('diff-base'));
+                        item.classList.add('diff-base');
+                        vscode.postMessage({ type: 'previewGitDiff', commitHash });
+                        return;
+                    }
+                }
             }
 
             // Load More button

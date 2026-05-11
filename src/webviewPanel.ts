@@ -36,6 +36,7 @@ export class ReviewWebviewPanel {
     public onPreviewDiffBase?: (originalPath: string, revision: number) => void;
     public onSwitchHistoryMode?: (originalPath: string, mode: 'local' | 'git') => Promise<void>;
     public onPinGitCommit?: (originalPath: string, commitHash: string) => void;
+    public onPreviewGitDiff?: (originalPath: string, commitHash: string) => void;
     public onLoadMoreCommits?: (originalPath: string) => void;
 
     constructor(
@@ -670,6 +671,10 @@ export class ReviewWebviewPanel {
             }
             case 'pinGitCommit': {
                 this.onPinGitCommit?.(originalPath, msg.commitHash);
+                break;
+            }
+            case 'previewGitDiff': {
+                this.onPreviewGitDiff?.(originalPath, msg.commitHash);
                 break;
             }
             case 'loadMoreCommits': {

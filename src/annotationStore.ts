@@ -33,10 +33,17 @@ export interface RevisionEntry {
     createdAt: string;         // ISO 8601
 }
 
+export interface DiffState {
+    mode: 'local' | 'git';                // which history mode was active
+    localPinnedRevision?: number;          // pinned revision index (local mode)
+    gitPinnedCommitHash?: string;          // pinned commit SHA (git mode)
+}
+
 export interface RevisionsFile {
     version: 3;
     sourceFile: string;        // relative path back to original .md
     revisions: RevisionEntry[];
+    diffState?: DiffState;                 // persisted diff base for resume
 }
 
 // --- Store ---
@@ -127,6 +134,25 @@ export class AnnotationStore {
         return this.revisionsData?.sourceFile ?? '';
     }
 
+    /** Get the persisted diff state (mode + pinned reference). */
+    getDiffState(): DiffState | undefined {
+        return this.revisionsData?.diffState;
+    }
+
+    /** Persist the current diff state (mode + pinned reference). */
+    setDiffState(state: DiffState): void {
+        if (!this.revisionsData) { return; }
+        this.revisionsData.diffState = state;
+        this.saveRevisionsIndex();
+    }
+
+    /** Clear persisted diff state (e.g. when a new revision is created). */
+    clearDiffState(): void {
+        if (!this.revisionsData) { return; }
+        delete this.revisionsData.diffState;
+        this.saveRevisionsIndex();
+    }
+
     /** Get the absolute directory where all plans/revisions are stored. */
     getPlansDir(): string {
         return this.plansDir;
@@ -159,6 +185,9 @@ export class AnnotationStore {
         this.currentRevisionIndex = nextRev;
         this.annotations = migratedAnnotations;
         this.annotationsCache.set(nextRev, this.annotations);
+
+        // Clear diff state — the old base may be stale after a new revision
+        delete this.revisionsData.diffState;
 
         this.saveRevisionFile(nextRev, migratedAnnotations);
         this.saveRevisionsIndex();
