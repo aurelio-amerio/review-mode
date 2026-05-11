@@ -43,7 +43,7 @@ lerna-debug.log*
 
 # revisions
 .revisions
-docs
+# docs
 test_directive.json
 
 # Generated VS Code API types (from @vscode/dts)
