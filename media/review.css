@@ -1176,3 +1176,89 @@ body.diff-mode .line-number {
         display: inline;
     }
 }
+
+/* ============================================================
+   Git history mode styles
+   ============================================================ */
+
+/* Override disabled state for the Git toggle when it becomes available */
+.toolbar-seg-btn#history-mode-git:not([disabled]) {
+    opacity: 1;
+    cursor: pointer;
+    color: var(--vscode-foreground);
+}
+
+/* Git commit entry: 4-column grid (hash | message | date | pin/badge) */
+.history-item.git-item {
+    display: grid;
+    grid-template-columns: 52px 1fr auto auto;
+    gap: 0 6px;
+    align-items: center;
+    padding: 5px 8px;
+    cursor: default;
+    border-radius: 4px;
+    margin-bottom: 2px;
+    min-height: 32px;
+}
+
+.history-item.git-item.diff-base {
+    background: var(--vscode-diffEditor-removedLineBackground, rgba(255, 0, 0, 0.08));
+}
+
+.history-item.git-item.diff-current {
+    font-weight: 600;
+}
+
+.git-hash {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.git-message {
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--vscode-foreground);
+}
+
+.git-date {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    white-space: nowrap;
+}
+
+/* Working copy entry — visually separated from historical commits */
+.history-item.git-working-copy {
+    border-bottom: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.35));
+    margin-bottom: 6px;
+    padding-bottom: 8px;
+}
+
+/* Load More button */
+.load-more-btn {
+    display: block;
+    width: 100%;
+    margin-top: 6px;
+    padding: 6px 0;
+    background: transparent;
+    border: 1px solid var(--vscode-button-border, rgba(128,128,128,0.35));
+    color: var(--vscode-foreground);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    text-align: center;
+}
+
+.load-more-btn:hover:not(:disabled) {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.load-more-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
