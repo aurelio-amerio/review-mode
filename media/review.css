@@ -98,6 +98,126 @@ body.markdown-content {
     display: block;
 }
 
+/* --- Secondary Toolbar (Diff Mode + History Mode) --- */
+.secondary-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 14px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.toolbar-label {
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--vscode-descriptionForeground, #888);
+}
+
+.toolbar-toggle {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    color: var(--vscode-descriptionForeground, #888);
+    font-size: 0.75em;
+    font-weight: 600;
+    padding: 2px 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.toolbar-toggle:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.toolbar-toggle[data-enabled="true"] {
+    background: rgba(74, 222, 128, 0.15);
+    border-color: rgba(74, 222, 128, 0.4);
+    color: #4ade80;
+}
+
+.toolbar-segmented {
+    display: flex;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.toolbar-seg-btn {
+    background: rgba(255, 255, 255, 0.04);
+    border: none;
+    color: var(--vscode-descriptionForeground, #888);
+    font-size: 0.75em;
+    font-weight: 600;
+    padding: 2px 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.toolbar-seg-btn + .toolbar-seg-btn {
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.toolbar-seg-btn:hover:not(.disabled) {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.toolbar-seg-btn.active {
+    background: rgba(37, 99, 235, 0.15);
+    color: var(--accent);
+}
+
+.toolbar-seg-btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* --- Diff line highlighting --- */
+.line-container.diff-added {
+    background: rgba(74, 222, 128, 0.08);
+    border-left-color: #4ade80;
+}
+
+.line-container.diff-added:hover {
+    background: rgba(74, 222, 128, 0.14);
+}
+
+.line-container.diff-removed {
+    background: rgba(248, 113, 113, 0.08);
+    border-left-color: #f87171;
+}
+
+.line-container.diff-removed:hover {
+    background: rgba(248, 113, 113, 0.14);
+}
+
+.diff-gutter-marker {
+    font-family: var(--vscode-editor-font-family, 'Consolas', monospace);
+    font-size: 0.8em;
+    font-weight: 700;
+    min-width: 12px;
+    text-align: center;
+}
+
+.diff-gutter-marker.added {
+    color: #4ade80;
+}
+
+.diff-gutter-marker.removed {
+    color: #f87171;
+}
+
 /* --- History Items --- */
 .history-item {
     display: flex;
