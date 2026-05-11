@@ -175,6 +175,11 @@ export class ReviewModeController {
         const revisions = this.store.getRevisions();
         if (revision < 0 || revision >= revisions.length) { return; }
 
+        if (this.diffModeEnabled) {
+            this.diffModeEnabled = false;
+            this.webview.postMessageToPanel(originalPath, { type: 'clearDiff' });
+        }
+
         this.store.loadRevision(revision);
         const plansDir = this.store.getPlansDir();
 
@@ -206,14 +211,11 @@ export class ReviewModeController {
     private sendDiffToWebview(originalPath: string): void {
         if (!this.diffModeEnabled) {
             this.webview.postMessageToPanel(originalPath, { type: 'clearDiff' });
-            const ext = path.extname(originalPath).toLowerCase();
-            if (ext === '.md' || ext === '.markdown') {
-                const revisions = this.store.getRevisions();
-                if (revisions.length > 0) {
-                    const plansDir = this.store.getPlansDir();
-                    const latest = revisions[revisions.length - 1];
-                    this.webview.refreshContent(originalPath, path.join(plansDir, latest.snapshotFile));
-                }
+            const revisions = this.store.getRevisions();
+            if (revisions.length > 0) {
+                const plansDir = this.store.getPlansDir();
+                const latest = revisions[revisions.length - 1];
+                this.webview.refreshContent(originalPath, path.join(plansDir, latest.snapshotFile));
             }
             return;
         }

@@ -558,7 +558,8 @@ export class ReviewWebviewPanel {
                 const lines = content.split('\n');
                 const previewLine = lines[msg.startLine - 1]?.trim() || '';
                 const annotation = this.store.addAnnotation(msg.startLine, msg.endLine, previewLine, msg.text);
-                if (msg.previousVersionContext && msg.currentVersionContext) {
+                const isNewAnnotation = annotation.thread.length === 1;
+                if (isNewAnnotation && msg.previousVersionContext && msg.currentVersionContext) {
                     annotation.previousVersionContext = msg.previousVersionContext;
                     annotation.currentVersionContext = msg.currentVersionContext;
                     this.store.saveAfterContextUpdate();
