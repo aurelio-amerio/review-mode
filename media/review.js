@@ -87,6 +87,13 @@
         document.getElementById('history-mode-local').classList.toggle('active', newMode === 'local');
         document.getElementById('history-mode-git').classList.toggle('active', newMode === 'git');
 
+        if (newMode === 'git') {
+            gitHistory = [];
+            hasMoreGitCommits = false;
+            pinnedGitCommitHash = null;
+            hasWorkingCopy = false;
+        }
+
         vscode.postMessage({ type: 'switchHistoryMode', mode: newMode });
     });
 
@@ -786,7 +793,8 @@
         pane.innerHTML = html;
 
         // Clone pane to drop any stale delegated listeners, then re-attach one
-        const freshPane = pane.cloneNode(true);
+        const freshPane = pane.cloneNode(false);
+        while (pane.firstChild) { freshPane.appendChild(pane.firstChild); }
         pane.parentNode.replaceChild(freshPane, pane);
 
         freshPane.addEventListener('click', (e) => {
