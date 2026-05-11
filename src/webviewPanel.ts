@@ -34,6 +34,9 @@ export class ReviewWebviewPanel {
     public onPinVersion?: (originalPath: string, revision: number) => void;
     public onRevertToPinnedDiff?: (originalPath: string) => void;
     public onPreviewDiffBase?: (originalPath: string, revision: number) => void;
+    public onSwitchHistoryMode?: (originalPath: string, mode: 'local' | 'git') => Promise<void>;
+    public onPinGitCommit?: (originalPath: string, commitHash: string) => void;
+    public onLoadMoreCommits?: (originalPath: string) => void;
 
     constructor(
         private context: vscode.ExtensionContext,
@@ -662,6 +665,11 @@ export class ReviewWebviewPanel {
                 break;
             }
         }
+    }
+
+    /** Public wrapper to trigger a history update from outside this class. */
+    public sendHistoryUpdatePublic(originalPath: string): void {
+        this.sendHistoryUpdate(originalPath);
     }
 
     /** Send history revision list to the webview. */

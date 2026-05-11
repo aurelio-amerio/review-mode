@@ -5,6 +5,15 @@ import * as path from 'path';
 import { AnnotationStore } from './annotationStore';
 import { ReviewWebviewPanel } from './webviewPanel';
 import { migrateAnnotations } from './diffUtils';
+import {
+    GitCommit,
+    isGitRepo,
+    getGitRepoRoot,
+    getGitRelativePath,
+    getGitHistory,
+    getGitFileContent,
+    hasUncommittedChanges,
+} from './gitUtils';
 
 export class ReviewModeController {
     private webview: ReviewWebviewPanel;
@@ -12,6 +21,13 @@ export class ReviewModeController {
     private revisionsPath: string = '';
     private diffModeEnabled: boolean = false;
     private pinnedRevision: number = -1;
+    private historyMode: 'local' | 'git' = 'local';
+    private pinnedCommitHash: string | null = null;
+    private gitPage: number = 0;
+    private readonly gitPageSize: number = 20;
+    private isGitAvailable: boolean = false;
+    private gitRepoRoot: string = '';
+    private gitRelPath: string = '';
 
     constructor(
         private store: AnnotationStore,
@@ -21,7 +37,7 @@ export class ReviewModeController {
         this.webview.onRevisionRequested = (originalPath: string, revision: number) => this.openRevision(originalPath, revision);
         this.webview.onDiffModeToggled = (originalPath: string, enabled: boolean) => {
             this.diffModeEnabled = enabled;
-            if (enabled) {
+            if (enabled && this.historyMode === 'local') {
                 const revisions = this.store.getRevisions();
                 if (revisions.length >= 2 && this.pinnedRevision < 0) {
                     this.pinnedRevision = revisions.length - 2;
@@ -43,6 +59,30 @@ export class ReviewModeController {
         this.webview.onPreviewDiffBase = (originalPath: string, revision: number) => {
             // Temporarily show diff from this revision without changing the actual pin
             this.sendDiffToWebview(originalPath, revision);
+        };
+
+        this.webview.onSwitchHistoryMode = async (originalPath: string, mode: 'local' | 'git') => {
+            this.historyMode = mode;
+            if (mode === 'git') {
+                this.pinnedCommitHash = null;
+                this.gitPage = 0;
+                await this.sendGitHistory(originalPath);
+            } else {
+                this.webview.sendHistoryUpdatePublic(originalPath);
+                if (this.diffModeEnabled) {
+                    this.sendDiffToWebview(originalPath);
+                }
+            }
+        };
+
+        this.webview.onPinGitCommit = (originalPath: string, commitHash: string) => {
+            this.pinnedCommitHash = commitHash;
+            void this.sendGitDiffToWebview(originalPath);
+        };
+
+        this.webview.onLoadMoreCommits = (originalPath: string) => {
+            this.gitPage++;
+            void this.appendGitHistory(originalPath);
         };
     }
 
@@ -176,6 +216,20 @@ export class ReviewModeController {
         this.diffModeEnabled = false;
         this.pinnedRevision = -1;
 
+        // Reset git-mode state and detect git availability
+        this.historyMode = 'local';
+        this.pinnedCommitHash = null;
+        this.gitPage = 0;
+        this.isGitAvailable = await isGitRepo(originalUri.fsPath);
+        if (this.isGitAvailable) {
+            this.gitRepoRoot = await getGitRepoRoot(originalUri.fsPath);
+            this.gitRelPath = await getGitRelativePath(originalUri.fsPath, this.gitRepoRoot);
+        }
+        this.webview.postMessageToPanel(originalUri.fsPath, {
+            type: 'setGitAvailable',
+            available: this.isGitAvailable,
+        });
+
         // Set context for when-clauses
         await vscode.commands.executeCommand('setContext', 'reviewMode.active', true);
     }
@@ -225,6 +279,11 @@ export class ReviewModeController {
             return;
         }
 
+        if (this.historyMode === 'git') {
+            void this.sendGitDiffToWebview(originalPath);
+            return;
+        }
+
         const revisions = this.store.getRevisions();
         if (revisions.length === 0) { return; }
 
@@ -240,7 +299,69 @@ export class ReviewModeController {
             baseText = fs.readFileSync(baseSnapshotPath, 'utf-8');
         }
 
-        this.webview.sendHighlightedDiff(originalPath, baseText, currentText, path.extname(originalPath).toLowerCase());
+        this.webview.sendHighlightedDiff(
+            originalPath, baseText, currentText,
+            path.extname(originalPath).toLowerCase(),
+        );
+    }
+
+    private async sendGitHistory(originalPath: string): Promise<void> {
+        try {
+            const commits = await getGitHistory(originalPath, 0, this.gitPageSize);
+            const hasMore = commits.length === this.gitPageSize;
+            const workingCopy = await hasUncommittedChanges(originalPath);
+
+            if (this.pinnedCommitHash === null) {
+                if (workingCopy && commits.length >= 1) {
+                    this.pinnedCommitHash = commits[0].hash;
+                } else if (!workingCopy && commits.length >= 2) {
+                    this.pinnedCommitHash = commits[1].hash;
+                }
+            }
+
+            this.webview.postMessageToPanel(originalPath, {
+                type: 'updateGitHistory',
+                commits,
+                hasMore,
+                hasWorkingCopy: workingCopy,
+                pinnedCommitHash: this.pinnedCommitHash,
+            });
+
+            if (this.diffModeEnabled && this.pinnedCommitHash) {
+                void this.sendGitDiffToWebview(originalPath);
+            }
+        } catch (err) {
+            console.error('Review Mode: failed to get git history', err);
+        }
+    }
+
+    private async appendGitHistory(originalPath: string): Promise<void> {
+        try {
+            const skip = this.gitPage * this.gitPageSize;
+            const commits = await getGitHistory(originalPath, skip, this.gitPageSize);
+            const hasMore = commits.length === this.gitPageSize;
+            this.webview.postMessageToPanel(originalPath, {
+                type: 'appendGitHistory',
+                commits,
+                hasMore,
+            });
+        } catch (err) {
+            console.error('Review Mode: failed to append git history', err);
+        }
+    }
+
+    private async sendGitDiffToWebview(originalPath: string): Promise<void> {
+        if (!this.diffModeEnabled || !this.pinnedCommitHash) { return; }
+        try {
+            const baseText = await getGitFileContent(
+                this.gitRepoRoot, this.pinnedCommitHash, this.gitRelPath,
+            );
+            const currentText = fs.readFileSync(originalPath, 'utf-8');
+            const ext = path.extname(originalPath).toLowerCase();
+            this.webview.sendHighlightedDiff(originalPath, baseText, currentText, ext);
+        } catch (err) {
+            console.error('Review Mode: failed to compute git diff', err);
+        }
     }
 
     isActive(): boolean {
