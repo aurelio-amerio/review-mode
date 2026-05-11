@@ -665,7 +665,7 @@ export class ReviewWebviewPanel {
                 break;
             }
             case 'switchHistoryMode': {
-                this.onSwitchHistoryMode?.(originalPath, msg.mode);
+                void this.onSwitchHistoryMode?.(originalPath, msg.mode);
                 break;
             }
             case 'pinGitCommit': {

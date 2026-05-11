@@ -6,7 +6,6 @@ import { AnnotationStore } from './annotationStore';
 import { ReviewWebviewPanel } from './webviewPanel';
 import { migrateAnnotations } from './diffUtils';
 import {
-    GitCommit,
     isGitRepo,
     getGitRepoRoot,
     getGitRelativePath,
@@ -220,6 +219,8 @@ export class ReviewModeController {
         this.historyMode = 'local';
         this.pinnedCommitHash = null;
         this.gitPage = 0;
+        this.gitRepoRoot = '';
+        this.gitRelPath = '';
         this.isGitAvailable = await isGitRepo(originalUri.fsPath);
         if (this.isGitAvailable) {
             this.gitRepoRoot = await getGitRepoRoot(originalUri.fsPath);
