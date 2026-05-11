@@ -48,6 +48,7 @@ export class ReviewModeController {
 
         this.webview.onPinVersion = (originalPath: string, revision: number) => {
             this.pinnedRevision = revision;
+            this.pinnedCommitHash = null;  // single-pin: clear the other mode's pin
             this.store.setDiffState({
                 mode: 'local',
                 localPinnedRevision: revision,
@@ -67,12 +68,11 @@ export class ReviewModeController {
 
         this.webview.onSwitchHistoryMode = async (originalPath: string, mode: 'local' | 'git') => {
             this.historyMode = mode;
-            // Persist mode switch (keep existing pin references)
-            const currentState = this.store.getDiffState();
+            // Persist mode switch — pin references are unchanged (single-pin model)
             this.store.setDiffState({
                 mode,
-                localPinnedRevision: currentState?.localPinnedRevision ?? (this.pinnedRevision >= 0 ? this.pinnedRevision : undefined),
-                gitPinnedCommitHash: currentState?.gitPinnedCommitHash ?? this.pinnedCommitHash ?? undefined,
+                localPinnedRevision: this.pinnedRevision >= 0 ? this.pinnedRevision : undefined,
+                gitPinnedCommitHash: this.pinnedCommitHash ?? undefined,
             });
             if (mode === 'git') {
                 this.gitPage = 0;
@@ -87,10 +87,10 @@ export class ReviewModeController {
 
         this.webview.onPinGitCommit = (originalPath: string, commitHash: string) => {
             this.pinnedCommitHash = commitHash;
+            this.pinnedRevision = -1;  // single-pin: clear the other mode's pin
             this.store.setDiffState({
                 mode: 'git',
                 gitPinnedCommitHash: commitHash,
-                localPinnedRevision: this.pinnedRevision >= 0 ? this.pinnedRevision : undefined,
             });
             void this.sendGitDiffToWebview(originalPath);
         };
