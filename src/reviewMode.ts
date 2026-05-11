@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { AnnotationStore, PinnedRef } from './annotationStore';
 import { ReviewWebviewPanel } from './webviewPanel';
-import { migrateAnnotations } from './diffUtils';
+import { migrateAnnotations, computeDiffHunks, getChangedCurrentLines } from './diffUtils';
 import {
     isGitRepo,
     getGitRepoRoot,
@@ -21,6 +21,9 @@ export class ReviewModeController {
     private diffModeEnabled: boolean = false;
     private pinnedRef: PinnedRef | null = null;
     private historyMode: 'local' | 'git' = 'local';
+    private suppressPinWarningForSession: boolean = false;
+    private suppressedPinTargets: Set<string> = new Set();
+    private isPinWarningActive: boolean = false;
     private gitPage: number = 0;
     private readonly gitPageSize: number = 20;
     private isGitAvailable: boolean = false;
@@ -46,9 +49,13 @@ export class ReviewModeController {
         };
 
         this.webview.onPinVersion = (originalPath: string, revision: number) => {
-            this.pinnedRef = { type: 'local', revision };
-            this.store.setDiffState({ mode: 'local', pinnedRef: this.pinnedRef });
-            this.sendDiffToWebview(originalPath);
+            void (async () => {
+                const targetKey = `local:${revision}`;
+                if (!await this.checkPinWarning(originalPath, targetKey)) { return; }
+                this.pinnedRef = { type: 'local', revision };
+                this.store.setDiffState({ mode: 'local', pinnedRef: this.pinnedRef });
+                this.sendDiffToWebview(originalPath);
+            })();
         };
 
         this.webview.onRevertToPinnedDiff = (originalPath: string) => {
@@ -77,9 +84,13 @@ export class ReviewModeController {
         };
 
         this.webview.onPinGitCommit = (originalPath: string, commitHash: string) => {
-            this.pinnedRef = { type: 'git', hash: commitHash };
-            this.store.setDiffState({ mode: 'git', pinnedRef: this.pinnedRef });
-            void this.sendGitDiffToWebview(originalPath);
+            void (async () => {
+                const targetKey = `git:${commitHash}`;
+                if (!await this.checkPinWarning(originalPath, targetKey)) { return; }
+                this.pinnedRef = { type: 'git', hash: commitHash };
+                this.store.setDiffState({ mode: 'git', pinnedRef: this.pinnedRef });
+                void this.sendGitDiffToWebview(originalPath);
+            })();
         };
 
         this.webview.onPreviewGitDiff = (originalPath: string, commitHash: string) => {
@@ -222,6 +233,9 @@ export class ReviewModeController {
         // Reset diff state
         this.diffModeEnabled = false;
         this.pinnedRef = null;
+        this.suppressPinWarningForSession = false;
+        this.suppressedPinTargets = new Set();
+        this.isPinWarningActive = false;
 
         // Reset git-mode state and detect git availability
         this.historyMode = 'local';
@@ -281,6 +295,82 @@ export class ReviewModeController {
         }
     }
 
+    /**
+     * Returns true if the user confirms the pin change (or if no warning is needed).
+     * Shows a VS Code warning dialog if annotations overlap changed diff lines.
+     * Handles per-target and per-session suppression.
+     */
+    private async checkPinWarning(originalPath: string, targetKey: string): Promise<boolean> {
+        if (this.isPinWarningActive) { return false; }
+        this.isPinWarningActive = true;
+        try {
+            if (this.suppressPinWarningForSession) { return true; }
+            if (this.suppressedPinTargets.has(targetKey)) { return true; }
+
+            const annotations = [...this.store.getAnnotations()];
+            if (annotations.length === 0) { return true; }
+
+            // Compute current diff relative to the existing pin
+            const revisions = this.store.getRevisions();
+            if (revisions.length === 0) { return true; }
+
+            let hunks: ReturnType<typeof computeDiffHunks>;
+            try {
+                const plansDir = this.store.getPlansDir();
+                const currentText = fs.readFileSync(
+                    path.join(plansDir, revisions[revisions.length - 1].snapshotFile), 'utf-8'
+                );
+
+                let baseText = '';
+                if (this.pinnedRef?.type === 'local') {
+                    const idx = this.pinnedRef.revision;
+                    if (idx < 0 || idx >= revisions.length) { return true; }
+                    baseText = fs.readFileSync(path.join(plansDir, revisions[idx].snapshotFile), 'utf-8');
+                } else if (this.pinnedRef?.type === 'git') {
+                    // TODO: support git pins — would require calling getGitFileContent for the base text
+                    return true;
+                } else {
+                    return true;
+                }
+
+                hunks = computeDiffHunks(baseText, currentText);
+            } catch {
+                return true;
+            }
+
+            const changedLines = getChangedCurrentLines(hunks);
+            if (changedLines.size === 0) { return true; }
+
+            const overlapping = annotations.filter(a => {
+                for (let l = a.startLine; l <= a.endLine; l++) {
+                    if (changedLines.has(l)) { return true; }
+                }
+                return false;
+            });
+            if (overlapping.length === 0) { return true; }
+
+            const lineList = [...new Set(overlapping.flatMap(a =>
+                Array.from({ length: a.endLine - a.startLine + 1 }, (_, i) => a.startLine + i)
+                    .filter(l => changedLines.has(l))
+            ))].sort((a, b) => a - b).slice(0, 10).join(', ');
+
+            const choice = await vscode.window.showWarningMessage(
+                `Changing the diff base may affect ${overlapping.length} comment(s) on lines ${lineList}. Continue?`,
+                'Change base',
+                'Skip for this target',
+                'Skip for session',
+                'Cancel',
+            );
+
+            if (!choice || choice === 'Cancel') { return false; }
+            if (choice === 'Skip for this target') { this.suppressedPinTargets.add(targetKey); }
+            if (choice === 'Skip for session') { this.suppressPinWarningForSession = true; }
+            return true;
+        } finally {
+            this.isPinWarningActive = false;
+        }
+    }
+
     private sendDiffToWebview(originalPath: string, overrideRevision?: number): void {
         if (!this.diffModeEnabled) {
             this.webview.postMessageToPanel(originalPath, { type: 'clearDiff' });
@@ -293,8 +383,8 @@ export class ReviewModeController {
             return;
         }
 
-        // Route by pin type, not history view mode
-        if (this.pinnedRef?.type === 'git') {
+        // Route by pin type only when showing the persisted pin (no override = not a preview)
+        if (overrideRevision === undefined && this.pinnedRef?.type === 'git') {
             void this.sendGitDiffToWebview(originalPath);
             return;
         }

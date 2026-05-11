@@ -202,3 +202,23 @@ export function migrateAnnotations(
 function generateId(): string {
     return Math.random().toString(36).substring(2, 9);
 }
+
+/**
+ * Returns the set of 1-based line numbers in the current (new) version that
+ * are part of added hunks — i.e. lines that exist in `newText` but differ
+ * from `oldText`. Used to detect whether pinned-diff annotations are at risk.
+ */
+export function getChangedCurrentLines(hunks: DiffHunk[]): Set<number> {
+    const changed = new Set<number>();
+    let currentLine = 0;
+    for (const hunk of hunks) {
+        if (hunk.type === 'removed') { continue; }
+        for (const _ of hunk.lines) {
+            currentLine++;
+            if (hunk.type === 'added') {
+                changed.add(currentLine);
+            }
+        }
+    }
+    return changed;
+}

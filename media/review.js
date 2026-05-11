@@ -16,8 +16,8 @@
     let currentDiffHunks = null;
     /** @type {{type: 'local', revision: number} | {type: 'git', hash: string} | null} */
     let pinnedRef = null;
-    /** @type {number|null} */
-    let activeDiffBase = null;
+    /** @type {{type: 'local', revision: number} | {type: 'git', hash: string} | null} */
+    let activeRef = null;
     /** @type {Array|null} */
     let lastRevisions = null;
     /** @type {number} */
@@ -55,7 +55,7 @@
             if (localBtn) { localBtn.classList.toggle('active', pinType === 'local'); }
             if (gitBtn) { gitBtn.classList.toggle('active', pinType === 'git'); }
             historyMode = pinType;
-            activeDiffBase = null;
+            activeRef = null;
             vscode.postMessage({ type: 'revertToPinnedDiff' });
         }
     }
@@ -78,7 +78,7 @@
 
         diffModeEnabled = !diffModeEnabled;
         if (!diffModeEnabled) {
-            activeDiffBase = null;
+            activeRef = null;
             // Force back to local mode (UI-only — persisted state preserved by extension)
             historyMode = 'local';
             const localBtn = document.getElementById('history-mode-local');
@@ -119,6 +119,7 @@
             hasMoreGitCommits = false;
             hasWorkingCopy = false;
         }
+        activeRef = null;
 
         vscode.postMessage({ type: 'switchHistoryMode', mode: newMode });
     });
@@ -650,7 +651,7 @@
         if (msg.type === 'clearDiff') {
             clearDiff();
             diffModeEnabled = false;
-            activeDiffBase = null;
+            activeRef = null;
             document.getElementById('diff-mode-toggle')?.setAttribute('aria-checked', 'false');
         }
         if (msg.type === 'setGitAvailable') {
@@ -696,7 +697,8 @@
                     gitBtn.classList.remove('disabled');
                 }
             }
-            // Render the correct history tab
+            // Clear any active preview and render the correct history tab
+            activeRef = null;
             if (historyMode === 'local' && lastRevisions) {
                 renderHistoryPane(lastRevisions, lastCurrentRevision);
             }
@@ -734,7 +736,9 @@
             let itemClass = 'history-item';
             if (diffModeEnabled) {
                 if (isLatest) { itemClass += ' diff-current'; }
-                const isDiffBase = activeDiffBase !== null ? (rev.revision === activeDiffBase) : isPinned;
+                const isDiffBase = activeRef?.type === 'local'
+                    ? activeRef.revision === rev.revision
+                    : activeRef === null && isPinned;
                 if (isDiffBase) { itemClass += ' diff-base'; }
             } else {
                 if (rev.revision === currentRevision) { itemClass += ' active'; }
@@ -789,7 +793,7 @@
                     return;
                 }
                 // In diff mode: temporarily preview diff from this revision (without changing the pin)
-                activeDiffBase = revision;
+                activeRef = { type: 'local', revision };
                 vscode.postMessage({ type: 'previewDiffBase', revision });
                 renderHistoryPane(revisions, currentRevision);
                 return;
@@ -834,7 +838,8 @@
         for (let i = startIdx; i < gitHistory.length; i++) {
             const commit = gitHistory[i];
             const isPinned = pinnedRef?.type === 'git' && commit.hash === pinnedRef.hash;
-            const baseClass = diffModeEnabled && isPinned ? ' diff-base' : '';
+            const isActive = activeRef?.type === 'git' && commit.hash === activeRef.hash;
+            const baseClass = diffModeEnabled && (isActive || (!activeRef && isPinned)) ? ' diff-base' : '';
 
             // Last column: pin button only in diff mode
             let lastColHtml = '';
@@ -881,10 +886,9 @@
                 if (item && !item.classList.contains('diff-current') && !e.target.closest('.load-more-btn')) {
                     const commitHash = item.dataset.commitHash;
                     if (commitHash) {
-                        // Visually mark as temporary diff-base
-                        freshPane.querySelectorAll('.history-item.git-item.diff-base').forEach(el => el.classList.remove('diff-base'));
-                        item.classList.add('diff-base');
+                        activeRef = { type: 'git', hash: commitHash };
                         vscode.postMessage({ type: 'previewGitDiff', commitHash });
+                        renderGitHistoryPane();
                         return;
                     }
                 }
