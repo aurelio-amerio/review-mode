@@ -262,8 +262,9 @@ body.markdown-content {
     padding: 6px 10px 6px 10px;
     cursor: pointer;
     border-radius: 4px;
+    border-left: 3px solid transparent;
     margin-bottom: 2px;
-    transition: background 0.15s;
+    transition: background 0.15s, border-color 0.15s;
 }
 
 .history-last-col {
@@ -279,24 +280,20 @@ body.markdown-content {
 }
 
 .history-item.active {
+    border-left-color: var(--accent);
     background: var(--highlight);
-    border: 1px solid var(--accent, rgba(37, 99, 235, 0.4));
 }
 
 /* Diff mode: green highlight for the current (latest) revision */
 .history-item.diff-current {
-    border-left-color: transparent;
-    border-radius: 4px;
+    border-left-color: #4ade80;
     background: rgba(74, 222, 128, 0.1);
-    border: 1px solid rgba(74, 222, 128, 0.25);
 }
 
 /* Diff mode: red highlight for the diff base revision */
 .history-item.diff-base {
-    border-left-color: transparent;
-    border-radius: 4px;
+    border-left-color: #f87171;
     background: rgba(248, 113, 113, 0.1);
-    border: 1px solid rgba(248, 113, 113, 0.25);
 }
 
 .history-rev {
@@ -1216,15 +1213,19 @@ body.diff-mode .line-number {
     padding: 5px 8px;
     cursor: default;
     border-radius: 4px;
+    border-left: 3px solid transparent;
     margin-bottom: 2px;
     min-height: 32px;
 }
 
 .history-item.git-item.diff-base {
+    border-left-color: #f87171;
     background: var(--vscode-diffEditor-removedLineBackground, rgba(255, 0, 0, 0.08));
 }
 
 .history-item.git-item.diff-current {
+    border-left-color: #4ade80;
+    background: rgba(74, 222, 128, 0.1);
     font-weight: 600;
 }
 
