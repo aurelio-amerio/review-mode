@@ -284,14 +284,18 @@ body.markdown-content {
 
 /* Diff mode: green highlight for the current (latest) revision */
 .history-item.diff-current {
-    border-left-color: #4ade80;
+    border-left-color: transparent;
+    border-radius: 4px;
     background: rgba(74, 222, 128, 0.1);
+    border: 1px solid rgba(74, 222, 128, 0.25);
 }
 
 /* Diff mode: red highlight for the diff base revision */
 .history-item.diff-base {
-    border-left-color: #f87171;
+    border-left-color: transparent;
+    border-radius: 4px;
     background: rgba(248, 113, 113, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.25);
 }
 
 .history-rev {
@@ -1217,13 +1221,17 @@ body.diff-mode .line-number {
 }
 
 .history-item.git-item.diff-base {
-    border-left-color: #f87171;
+    border-left-color: transparent;
+    border-radius: 4px;
     background: rgba(248, 113, 113, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.25);
 }
 
 .history-item.git-item.diff-current {
-    border-left-color: #4ade80;
+    border-left-color: transparent;
+    border-radius: 4px;
     background: rgba(74, 222, 128, 0.1);
+    border: 1px solid rgba(74, 222, 128, 0.25);
     font-weight: 600;
 }
 
