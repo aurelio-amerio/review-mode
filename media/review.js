@@ -22,6 +22,16 @@
     let lastRevisions = null;
     /** @type {number} */
     let lastCurrentRevision = -1;
+    /** @type {'local'|'git'} */
+    let historyMode = 'local';
+    /** @type {Array<{hash: string, shortHash: string, message: string, relativeDate: string}>} */
+    let gitHistory = [];
+    /** @type {boolean} */
+    let hasMoreGitCommits = false;
+    /** @type {string|null} */
+    let pinnedGitCommitHash = null;
+    /** @type {boolean} */
+    let hasWorkingCopy = false;
 
     // --- Tab switching & State ---
     function activateTab(tabId) {
@@ -64,6 +74,20 @@
         toggle.setAttribute('aria-checked', String(diffModeEnabled));
         vscode.postMessage({ type: 'toggleDiffMode', enabled: diffModeEnabled });
         if (lastRevisions) { renderHistoryPane(lastRevisions, lastCurrentRevision); }
+    });
+
+    // --- History mode (Local / Git) toggle ---
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('#history-mode-local, #history-mode-git');
+        if (!btn || btn.disabled || btn.classList.contains('disabled')) { return; }
+        const newMode = btn.id === 'history-mode-git' ? 'git' : 'local';
+        if (newMode === historyMode) { return; }
+        historyMode = newMode;
+
+        document.getElementById('history-mode-local').classList.toggle('active', newMode === 'local');
+        document.getElementById('history-mode-git').classList.toggle('active', newMode === 'git');
+
+        vscode.postMessage({ type: 'switchHistoryMode', mode: newMode });
     });
 
     // --- Helper: get line range from native text selection ---
@@ -577,7 +601,9 @@
             }
         }
         if (msg.type === 'updateHistory') {
-            renderHistoryPane(msg.revisions, msg.currentRevision);
+            if (historyMode === 'local') {
+                renderHistoryPane(msg.revisions, msg.currentRevision);
+            }
         }
         if (msg.type === 'replaceContent') {
             const codePane = document.querySelector('.code-pane');
@@ -593,6 +619,26 @@
             diffModeEnabled = false;
             activeDiffBase = null;
             document.getElementById('diff-mode-toggle')?.setAttribute('aria-checked', 'false');
+        }
+        if (msg.type === 'setGitAvailable') {
+            const gitBtn = document.getElementById('history-mode-git');
+            if (gitBtn && msg.available) {
+                gitBtn.disabled = false;
+                gitBtn.classList.remove('disabled');
+                gitBtn.title = 'Show Git commit history';
+            }
+        }
+        if (msg.type === 'updateGitHistory') {
+            gitHistory = msg.commits || [];
+            hasMoreGitCommits = !!msg.hasMore;
+            hasWorkingCopy = !!msg.hasWorkingCopy;
+            pinnedGitCommitHash = msg.pinnedCommitHash || null;
+            renderGitHistoryPane();
+        }
+        if (msg.type === 'appendGitHistory') {
+            gitHistory = gitHistory.concat(msg.commits || []);
+            hasMoreGitCommits = !!msg.hasMore;
+            renderGitHistoryPane();
         }
     });
 
@@ -683,6 +729,85 @@
                 return;
             } else {
                 vscode.postMessage({ type: 'openRevision', revision });
+            }
+        });
+    }
+
+    function renderGitHistoryPane() {
+        const pane = document.getElementById('history-pane-content');
+        if (!pane) { return; }
+
+        if (gitHistory.length === 0 && !hasWorkingCopy) {
+            pane.innerHTML = '<div class="history-empty">No commits found for this file.</div>';
+            return;
+        }
+
+        let html = '';
+
+        // Working copy entry — always at top, always the target, no pin
+        if (hasWorkingCopy) {
+            html += `<div class="history-item git-item git-working-copy diff-current">
+                <span class="git-hash">(changes)</span>
+                <span class="git-message">Uncommitted changes</span>
+                <span class="git-date">now</span>
+                <span class="history-current-badge">now</span>
+            </div>`;
+        } else if (gitHistory.length > 0) {
+            // Latest commit is the target when there are no working copy changes
+            const latest = gitHistory[0];
+            html += `<div class="history-item git-item diff-current" data-commit-hash="${escapeHtml(latest.hash)}">
+                <span class="git-hash">${escapeHtml(latest.shortHash)}</span>
+                <span class="git-message" title="${escapeHtml(latest.message)}">${escapeHtml(latest.message)}</span>
+                <span class="git-date">${escapeHtml(latest.relativeDate)}</span>
+                <span class="history-current-badge">now</span>
+            </div>`;
+        }
+
+        // Historical commit entries (all commits when hasWorkingCopy, skipping commit[0] otherwise)
+        const startIdx = hasWorkingCopy ? 0 : 1;
+        for (let i = startIdx; i < gitHistory.length; i++) {
+            const commit = gitHistory[i];
+            const isPinned = commit.hash === pinnedGitCommitHash;
+            const baseClass = diffModeEnabled && isPinned ? ' diff-base' : '';
+            html += `<div class="history-item git-item${baseClass}" data-commit-hash="${escapeHtml(commit.hash)}">
+                <span class="git-hash">${escapeHtml(commit.shortHash)}</span>
+                <span class="git-message" title="${escapeHtml(commit.message)}">${escapeHtml(commit.message)}</span>
+                <span class="git-date">${escapeHtml(commit.relativeDate)}</span>
+                <button class="pin-btn${isPinned ? ' pinned' : ''}" data-pin-commit="${escapeHtml(commit.hash)}" title="Set as diff base">
+                    <span class="codicon codicon-pin"></span>
+                </button>
+            </div>`;
+        }
+
+        if (hasMoreGitCommits) {
+            html += `<button class="load-more-btn">Load more...</button>`;
+        }
+
+        pane.innerHTML = html;
+
+        // Clone pane to drop any stale delegated listeners, then re-attach one
+        const freshPane = pane.cloneNode(true);
+        pane.parentNode.replaceChild(freshPane, pane);
+
+        freshPane.addEventListener('click', (e) => {
+            // Pin button
+            const pinBtn = e.target.closest('[data-pin-commit]');
+            if (pinBtn) {
+                const commitHash = pinBtn.dataset.pinCommit;
+                if (commitHash === pinnedGitCommitHash) { return; }
+                pinnedGitCommitHash = commitHash;
+                vscode.postMessage({ type: 'pinGitCommit', commitHash });
+                renderGitHistoryPane();
+                return;
+            }
+
+            // Load More button
+            const loadMoreBtn = e.target.closest('.load-more-btn');
+            if (loadMoreBtn && !loadMoreBtn.disabled) {
+                vscode.postMessage({ type: 'loadMoreCommits' });
+                loadMoreBtn.textContent = 'Loading...';
+                loadMoreBtn.disabled = true;
+                return;
             }
         });
     }
