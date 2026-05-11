@@ -41,7 +41,7 @@ body.markdown-content {
     flex: 1;
     min-width: 0;
     overflow-x: auto;
-    padding-left: 48px;
+    padding-left: 68px;
 }
 
 .comments-pane {
@@ -274,6 +274,18 @@ body.markdown-content {
     background: var(--highlight);
 }
 
+/* Diff mode: green highlight for the current (latest) revision */
+.history-item.diff-current {
+    border-left-color: #4ade80;
+    background: rgba(74, 222, 128, 0.1);
+}
+
+/* Diff mode: red highlight for the diff base revision */
+.history-item.diff-base {
+    border-left-color: #f87171;
+    background: rgba(248, 113, 113, 0.1);
+}
+
 .history-rev {
     font-family: var(--vscode-editor-font-family, 'Consolas', monospace);
     font-weight: 700;
@@ -289,9 +301,9 @@ body.markdown-content {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--accent);
-    background: rgba(37, 99, 235, 0.12);
-    border: 1px solid rgba(37, 99, 235, 0.3);
+    color: #4ade80;
+    background: rgba(74, 222, 128, 0.12);
+    border: 1px solid rgba(74, 222, 128, 0.3);
     border-radius: 3px;
     padding: 1px 4px;
     white-space: nowrap;
@@ -349,9 +361,7 @@ body.markdown-content {
 
 .pin-btn.pinned {
     opacity: 1;
-    color: var(--accent);
-    border-color: rgba(37, 99, 235, 0.3);
-    background: rgba(37, 99, 235, 0.08);
+    color: #e0e0e0;
 }
 
 /* --- Line container --- */
@@ -380,7 +390,7 @@ body.markdown-content {
 /* --- Gutter (positioned in the left margin) --- */
 .line-gutter {
     position: absolute;
-    left: -44px;
+    left: -64px;
     top: 2px;
     display: flex;
     align-items: center;
@@ -454,6 +464,15 @@ body.diff-mode .line-number {
     margin-left: 8px;
     flex-shrink: 0;
     align-self: center;
+}
+
+/* --- Annotation indicator bar (for diff lines where blue bg would conflict) --- */
+.annotation-indicator {
+    height: 2px;
+    background: var(--accent);
+    margin: 0;
+    border-left: 3px solid var(--accent);
+    opacity: 0.6;
 }
 
 /* ═══════════════════════════════════════════════════

@@ -219,8 +219,10 @@ export class ReviewWebviewPanel {
             });
 
             this.panels.get(originalPath)?.panel.webview.postMessage({ type: 'showDiff', hunks: highlightedHunks });
+            this.sendAnnotationUpdate(originalPath);
         } else {
             this.panels.get(originalPath)?.panel.webview.postMessage({ type: 'showDiff', hunks });
+            this.sendAnnotationUpdate(originalPath);
         }
     }
 
@@ -422,8 +424,8 @@ export class ReviewWebviewPanel {
 
             html += `<div class="line-container todo-item${isDone ? ' todo-done' : ''}" data-line="${dataLine}" data-end-line="${dataEndLine}">
     <div class="line-gutter">
-        <span class="line-number">${dataLine}</span>
         <button class="add-note-btn" data-line="${dataLine}" title="Add comment"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3l3 3 3-3h3a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm0 9h-3.5L8 12.5 5.5 10H2V2h12v8z"/><path d="M7.25 4v2.25H5v1.5h2.25V10h1.5V7.75H11v-1.5H8.75V4z"/></svg></button>
+        <span class="line-number">${dataLine}</span>
     </div>
     <div class="line-content todo-content">
         <span class="todo-checkbox${isDone ? ' checked' : ''}"></span>
@@ -505,8 +507,8 @@ export class ReviewWebviewPanel {
                 // Empty block — collapsed spacer
                 result += `<div class="line-container empty-line" data-line="${block.startLine}">
     <div class="line-gutter">
-        <span class="line-number">${block.startLine}</span>
         <button class="add-note-btn" data-line="${block.startLine}" title="Add comment"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3l3 3 3-3h3a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm0 9h-3.5L8 12.5 5.5 10H2V2h12v8z"/><path d="M7.25 4v2.25H5v1.5h2.25V10h1.5V7.75H11v-1.5H8.75V4z"/></svg></button>
+        <span class="line-number">${block.startLine}</span>
     </div>
     <div class="line-content">&nbsp;</div>
 </div>\n`;
@@ -520,8 +522,8 @@ export class ReviewWebviewPanel {
                     .replace(/\n?<\/[uo]l>$/, '');
                 result += `<div class="line-container md-block md-list-item" data-line="${block.startLine}" data-end-line="${block.endLine}">
     <div class="line-gutter">
-        <span class="line-number">${block.startLine}</span>
         <button class="add-note-btn" data-line="${block.startLine}" title="Add comment"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3l3 3 3-3h3a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm0 9h-3.5L8 12.5 5.5 10H2V2h12v8z"/><path d="M7.25 4v2.25H5v1.5h2.25V10h1.5V7.75H11v-1.5H8.75V4z"/></svg></button>
+        <span class="line-number">${block.startLine}</span>
     </div>
     <div class="line-content">${renderedBlock}</div>
 </div>\n`;
@@ -530,8 +532,8 @@ export class ReviewWebviewPanel {
                 let renderedBlock = (marked.parse(blockText) as string).trim();
                 result += `<div class="line-container md-block" data-line="${block.startLine}" data-end-line="${block.endLine}">
     <div class="line-gutter">
-        <span class="line-number">${block.startLine}</span>
         <button class="add-note-btn" data-line="${block.startLine}" title="Add comment"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3l3 3 3-3h3a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm0 9h-3.5L8 12.5 5.5 10H2V2h12v8z"/><path d="M7.25 4v2.25H5v1.5h2.25V10h1.5V7.75H11v-1.5H8.75V4z"/></svg></button>
+        <span class="line-number">${block.startLine}</span>
     </div>
     <div class="line-content">${renderedBlock}</div>
 </div>\n`;
@@ -550,8 +552,8 @@ export class ReviewWebviewPanel {
     private lineTemplate(lineNum: number, content: string): string {
         return `<div class="line-container" data-line="${lineNum}">
     <div class="line-gutter">
-        <span class="line-number">${lineNum}</span>
         <button class="add-note-btn" data-line="${lineNum}" title="Add comment"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3l3 3 3-3h3a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm0 9h-3.5L8 12.5 5.5 10H2V2h12v8z"/><path d="M7.25 4v2.25H5v1.5h2.25V10h1.5V7.75H11v-1.5H8.75V4z"/></svg></button>
+        <span class="line-number">${lineNum}</span>
     </div>
     <div class="line-content">${content}</div>
 </div>\n`;

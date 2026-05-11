@@ -16,6 +16,12 @@
     let currentDiffHunks = null;
     /** @type {number} */
     let pinnedRevision = -1;
+    /** @type {number|null} */
+    let activeDiffBase = null;
+    /** @type {Array|null} */
+    let lastRevisions = null;
+    /** @type {number} */
+    let lastCurrentRevision = -1;
 
     // --- Tab switching & State ---
     function activateTab(tabId) {
@@ -54,8 +60,10 @@
         if (!toggle) { return; }
 
         diffModeEnabled = !diffModeEnabled;
+        if (!diffModeEnabled) { activeDiffBase = null; }
         toggle.setAttribute('aria-checked', String(diffModeEnabled));
         vscode.postMessage({ type: 'toggleDiffMode', enabled: diffModeEnabled });
+        if (lastRevisions) { renderHistoryPane(lastRevisions, lastCurrentRevision); }
     });
 
     // --- Helper: get line range from native text selection ---
@@ -516,9 +524,9 @@
                     const anchorLine = currentLineNum > 0 ? currentLineNum : 1;
                     html += `<div class="line-container diff-removed" data-diff-type="removed">
     <div class="line-gutter">
+        <button class="add-note-btn" data-line="${anchorLine}" title="Add comment">${addNoteIcon}</button>
         <span class="line-number"></span>
         <span class="diff-gutter-marker removed">−</span>
-        <button class="add-note-btn" data-line="${anchorLine}" title="Add comment">${addNoteIcon}</button>
     </div>
     <div class="line-content">${lineHtml}</div>
 </div>\n`;
@@ -526,9 +534,9 @@
                     currentLineNum++;
                     html += `<div class="line-container diff-added" data-line="${currentLineNum}" data-diff-type="added">
     <div class="line-gutter">
+        <button class="add-note-btn" data-line="${currentLineNum}" title="Add comment">${addNoteIcon}</button>
         <span class="line-number">${currentLineNum}</span>
         <span class="diff-gutter-marker added">+</span>
-        <button class="add-note-btn" data-line="${currentLineNum}" title="Add comment">${addNoteIcon}</button>
     </div>
     <div class="line-content">${lineHtml}</div>
 </div>\n`;
@@ -536,8 +544,8 @@
                     currentLineNum++;
                     html += `<div class="line-container" data-line="${currentLineNum}">
     <div class="line-gutter">
-        <span class="line-number">${currentLineNum}</span>
         <button class="add-note-btn" data-line="${currentLineNum}" title="Add comment">${addNoteIcon}</button>
+        <span class="line-number">${currentLineNum}</span>
     </div>
     <div class="line-content">${lineHtml}</div>
 </div>\n`;
@@ -583,12 +591,15 @@
         if (msg.type === 'clearDiff') {
             clearDiff();
             diffModeEnabled = false;
+            activeDiffBase = null;
             document.getElementById('diff-mode-toggle')?.setAttribute('aria-checked', 'false');
         }
     });
 
     // --- History pane rendering ---
     function renderHistoryPane(revisions, currentRevision) {
+        lastRevisions = revisions;
+        lastCurrentRevision = currentRevision;
         const pane = document.getElementById('history-pane-content');
         if (!pane) { return; }
         if (!revisions || revisions.length === 0) {
@@ -612,7 +623,15 @@
             const isLatest = rev.revision === latestRevision;
             const isPinned = rev.revision === pinnedRevision;
             const item = document.createElement('div');
-            item.className = 'history-item' + (rev.revision === currentRevision ? ' active' : '');
+            let itemClass = 'history-item';
+            if (diffModeEnabled) {
+                if (isLatest) { itemClass += ' diff-current'; }
+                const isDiffBase = activeDiffBase !== null ? (rev.revision === activeDiffBase) : isPinned;
+                if (isDiffBase) { itemClass += ' diff-base'; }
+            } else {
+                if (rev.revision === currentRevision) { itemClass += ' active'; }
+            }
+            item.className = itemClass;
             item.dataset.revision = String(rev.revision);
 
             // Column 2: pin button for non-latest, "current" badge for latest
@@ -652,9 +671,16 @@
             const revision = parseInt(item.dataset.revision, 10);
             if (isNaN(revision)) { return; }
 
-            if (diffModeEnabled && revision !== latestRevision) {
+            if (diffModeEnabled) {
+                if (revision === latestRevision) {
+                    // Clicking "now" while in diff mode: no-op, keep current diff base
+                    return;
+                }
                 // In diff mode: temporarily preview diff from this revision (without changing the pin)
+                activeDiffBase = revision;
                 vscode.postMessage({ type: 'previewDiffBase', revision });
+                renderHistoryPane(revisions, currentRevision);
+                return;
             } else {
                 vscode.postMessage({ type: 'openRevision', revision });
             }
@@ -662,16 +688,33 @@
     }
 
     function updateAnnotationHighlights(annotations) {
+        // Clear previous highlights
         document.querySelectorAll('.line-container.annotated').forEach(el => {
             el.classList.remove('annotated');
         });
         document.querySelectorAll('.annotation-badge').forEach(el => el.remove());
+        document.querySelectorAll('.annotation-indicator').forEach(el => el.remove());
 
         for (const ann of annotations) {
             for (let i = ann.startLine; i <= ann.endLine; i++) {
                 const container = document.querySelector(`.line-container[data-line="${i}"]`);
                 if (container) {
-                    container.classList.add('annotated');
+                    const isDiffLine = container.classList.contains('diff-added') || container.classList.contains('diff-removed');
+
+                    if (isDiffLine) {
+                        // For diff lines: add a thin blue indicator bar below instead of overlaying background
+                        // Only add one indicator per line (check if already present)
+                        if (!container.nextElementSibling || !container.nextElementSibling.classList.contains('annotation-indicator')) {
+                            const indicator = document.createElement('div');
+                            indicator.className = 'annotation-indicator';
+                            container.after(indicator);
+                        }
+                    } else {
+                        // For unchanged lines: use the normal annotated highlight
+                        container.classList.add('annotated');
+                    }
+
+                    // Badge on the start line (works for both diff and non-diff lines)
                     if (i === ann.startLine) {
                         const badge = document.createElement('span');
                         badge.className = 'annotation-badge';
