@@ -45,15 +45,36 @@ body.markdown-content {
 }
 
 .comments-pane {
-    width: 320px;
-    min-width: 280px;
-    border-left: 1px solid var(--border);
+    width: 380px;
+    min-width: 220px;
+    max-width: 700px;
+    border-left: none;
     background: var(--bg);
     overflow-y: auto;
     position: sticky;
     top: 0;
     height: 100vh;
     padding: 8px 0;
+    flex-shrink: 0;
+}
+
+/* --- Panel resize handle --- */
+.panel-resize-handle {
+    width: 5px;
+    flex-shrink: 0;
+    cursor: col-resize;
+    background: var(--border);
+    opacity: 0.4;
+    transition: opacity 0.15s, background 0.15s;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+}
+
+.panel-resize-handle:hover,
+.panel-resize-handle.dragging {
+    opacity: 1;
+    background: var(--accent);
 }
 
 /* --- Pane Tabs (Comments | History) --- */
@@ -122,29 +143,43 @@ body.markdown-content {
     color: var(--vscode-descriptionForeground, #888);
 }
 
-.toolbar-toggle {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 4px;
-    color: var(--vscode-descriptionForeground, #888);
-    font-size: 0.75em;
-    font-weight: 600;
-    padding: 2px 10px;
+/* Pill toggle switch */
+.toolbar-switch {
+    width: 36px;
+    height: 18px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 9px;
     cursor: pointer;
-    transition: all 0.15s;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+    position: relative;
+    transition: background 0.2s, border-color 0.2s;
+    flex-shrink: 0;
 }
 
-.toolbar-toggle:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.25);
+.toolbar-switch:hover {
+    background: rgba(255, 255, 255, 0.18);
 }
 
-.toolbar-toggle[data-enabled="true"] {
-    background: rgba(74, 222, 128, 0.15);
-    border-color: rgba(74, 222, 128, 0.4);
-    color: #4ade80;
+.toolbar-switch[aria-checked="true"] {
+    background: rgba(74, 222, 128, 0.35);
+    border-color: rgba(74, 222, 128, 0.6);
+}
+
+.switch-thumb {
+    width: 12px;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.2s, background 0.2s;
+    pointer-events: none;
+}
+
+.toolbar-switch[aria-checked="true"] .switch-thumb {
+    transform: translateX(18px);
+    background: #4ade80;
 }
 
 .toolbar-segmented {
@@ -220,10 +255,11 @@ body.markdown-content {
 
 /* --- History Items --- */
 .history-item {
-    display: flex;
+    display: grid;
+    grid-template-columns: 52px 28px 1fr auto;
     align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
+    gap: 4px;
+    padding: 6px 10px 6px 14px;
     cursor: pointer;
     border-left: 3px solid transparent;
     transition: background 0.15s, border-color 0.15s;
@@ -243,13 +279,30 @@ body.markdown-content {
     font-weight: 700;
     font-size: 0.85em;
     color: var(--accent);
-    min-width: 40px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-current-badge {
+    font-size: 0.65em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    background: rgba(37, 99, 235, 0.12);
+    border: 1px solid rgba(37, 99, 235, 0.3);
+    border-radius: 3px;
+    padding: 1px 4px;
+    white-space: nowrap;
 }
 
 .history-date {
-    font-size: 0.8em;
+    font-size: 0.78em;
     color: var(--vscode-descriptionForeground, #888);
-    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .history-count {
@@ -344,6 +397,11 @@ body.markdown-content {
 /* Hide line numbers in markdown mode — just show the "+" button */
 .markdown-content .line-number {
     display: none;
+}
+
+/* Show line numbers in diff mode regardless of file type */
+body.diff-mode .line-number {
+    display: block;
 }
 
 .add-note-btn {

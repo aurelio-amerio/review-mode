@@ -5,6 +5,7 @@ import { marked } from 'marked';
 import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
 import { parse as parseYaml } from 'yaml';
 import { AnnotationStore } from './annotationStore';
+import { computeDiffHunks, DiffHunk } from './diffUtils';
 
 // Map file extensions to Shiki language IDs
 const EXT_TO_LANG: Record<string, string> = {
@@ -123,7 +124,7 @@ export class ReviewWebviewPanel {
 
         let bodyContent = '';
         if (isMarkdown) {
-            bodyContent = this.renderMarkdownDocument(content, lines);
+            bodyContent = this.renderMarkdownDocument(lines);
         } else if (lang && this.highlighter) {
             const theme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Light
                 ? 'light-plus' : 'dark-plus';
@@ -180,6 +181,47 @@ export class ReviewWebviewPanel {
         this.panels.get(originalPath)?.panel.webview.postMessage(message);
     }
 
+    /** Compute diff hunks, apply Shiki syntax highlighting, and send showDiff to the webview. */
+    sendHighlightedDiff(originalPath: string, baseText: string, currentText: string, ext: string): void {
+        const hunks = computeDiffHunks(baseText, currentText);
+        const lang = EXT_TO_LANG[ext];
+
+        if (lang && this.highlighter) {
+            const theme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Light
+                ? 'light-plus' : 'dark-plus';
+            const oldTokens = baseText
+                ? this.highlighter.codeToTokensBase(baseText, { lang: lang as BundledLanguage, theme })
+                : [];
+            const newTokens = this.highlighter.codeToTokensBase(currentText, { lang: lang as BundledLanguage, theme });
+
+            let oldIdx = 0;
+            let newIdx = 0;
+            const highlightedHunks = hunks.map((hunk: DiffHunk) => {
+                const highlightedLines = hunk.lines.map(() => {
+                    let tokens;
+                    if (hunk.type === 'removed') {
+                        tokens = oldTokens[oldIdx++] ?? [];
+                    } else if (hunk.type === 'added') {
+                        tokens = newTokens[newIdx++] ?? [];
+                    } else {
+                        oldIdx++;
+                        tokens = newTokens[newIdx++] ?? [];
+                    }
+                    return tokens.map((t: any) =>
+                        t.color
+                            ? `<span style="color:${t.color}">${this.escapeHtml(t.content)}</span>`
+                            : this.escapeHtml(t.content)
+                    ).join('');
+                });
+                return { type: hunk.type, lines: hunk.lines, highlightedLines };
+            });
+
+            this.panels.get(originalPath)?.panel.webview.postMessage({ type: 'showDiff', hunks: highlightedHunks });
+        } else {
+            this.panels.get(originalPath)?.panel.webview.postMessage({ type: 'showDiff', hunks });
+        }
+    }
+
     /** Generate the full HTML for the WebView. */
     private getHtml(snapshotPath: string, panel: vscode.WebviewPanel): string {
         const content = fs.readFileSync(snapshotPath, 'utf-8');
@@ -201,7 +243,7 @@ export class ReviewWebviewPanel {
 
         let bodyContent = '';
         if (isMarkdown) {
-            bodyContent = this.renderMarkdownDocument(content, lines);
+            bodyContent = this.renderMarkdownDocument(lines);
         } else if (lang && this.highlighter) {
             // Syntax-highlighted code using Shiki (VS Code TextMate grammars)
             const theme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Light
@@ -241,6 +283,7 @@ export class ReviewWebviewPanel {
         <div class="code-pane">
             ${bodyContent}
         </div>
+        <div class="panel-resize-handle" id="panel-resize-handle"></div>
         <div class="comments-pane">
             <div class="pane-tabs">
                 <button class="pane-tab active" data-tab="comments">Comments</button>
@@ -249,7 +292,9 @@ export class ReviewWebviewPanel {
             <div class="secondary-toolbar">
                 <div class="toolbar-group">
                     <label class="toolbar-label">Diff</label>
-                    <button class="toolbar-toggle" id="diff-mode-toggle" data-enabled="false">OFF</button>
+                    <div class="toolbar-switch" id="diff-mode-toggle" role="switch" aria-checked="false">
+                        <span class="switch-thumb"></span>
+                    </div>
                 </div>
                 <div class="toolbar-group">
                     <div class="toolbar-segmented">
@@ -390,7 +435,7 @@ export class ReviewWebviewPanel {
     }
 
     /** Render full markdown as a document, grouping source lines into blocks with annotation anchors. */
-    private renderMarkdownDocument(content: string, sourceLines: string[]): string {
+    private renderMarkdownDocument(sourceLines: string[]): string {
         // Detect and parse YAML frontmatter
         const { frontmatter, bodyStartIndex, todoLineRanges } = this.parseFrontmatter(sourceLines);
         const todos: Array<{ id?: string; content: string; status?: string }> | null =

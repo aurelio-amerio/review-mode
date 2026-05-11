@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { AnnotationStore } from './annotationStore';
 import { ReviewWebviewPanel } from './webviewPanel';
-import { migrateAnnotations, computeDiffHunks } from './diffUtils';
+import { migrateAnnotations } from './diffUtils';
 
 export class ReviewModeController {
     private webview: ReviewWebviewPanel;
@@ -175,11 +175,6 @@ export class ReviewModeController {
         const revisions = this.store.getRevisions();
         if (revision < 0 || revision >= revisions.length) { return; }
 
-        if (this.diffModeEnabled) {
-            this.diffModeEnabled = false;
-            this.webview.postMessageToPanel(originalPath, { type: 'clearDiff' });
-        }
-
         this.store.loadRevision(revision);
         const plansDir = this.store.getPlansDir();
 
@@ -234,8 +229,7 @@ export class ReviewModeController {
             baseText = fs.readFileSync(baseSnapshotPath, 'utf-8');
         }
 
-        const hunks = computeDiffHunks(baseText, currentText);
-        this.webview.postMessageToPanel(originalPath, { type: 'showDiff', hunks });
+        this.webview.sendHighlightedDiff(originalPath, baseText, currentText, path.extname(originalPath).toLowerCase());
     }
 
     isActive(): boolean {

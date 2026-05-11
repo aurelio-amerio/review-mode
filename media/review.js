@@ -46,8 +46,7 @@
         if (!toggle) { return; }
 
         diffModeEnabled = !diffModeEnabled;
-        toggle.dataset.enabled = String(diffModeEnabled);
-        toggle.textContent = diffModeEnabled ? 'ON' : 'OFF';
+        toggle.setAttribute('aria-checked', String(diffModeEnabled));
         vscode.postMessage({ type: 'toggleDiffMode', enabled: diffModeEnabled });
     });
 
@@ -495,13 +494,16 @@
         const codePane = document.querySelector('.code-pane');
         if (!codePane) { return; }
 
+        document.body.classList.add('diff-mode');
+
         const addNoteIcon = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3l3 3 3-3h3a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm0 9h-3.5L8 12.5 5.5 10H2V2h12v8z"/><path d="M7.25 4v2.25H5v1.5h2.25V10h1.5V7.75H11v-1.5H8.75V4z"/></svg>';
         let html = '';
         let currentLineNum = 0;
 
         for (const hunk of hunks) {
-            for (const line of hunk.lines) {
-                const escaped = escapeHtml(line) || '&nbsp;';
+            for (let i = 0; i < hunk.lines.length; i++) {
+                const line = hunk.lines[i];
+                const lineHtml = (hunk.highlightedLines && hunk.highlightedLines[i]) || escapeHtml(line) || '&nbsp;';
                 if (hunk.type === 'removed') {
                     const anchorLine = currentLineNum > 0 ? currentLineNum : 1;
                     html += `<div class="line-container diff-removed" data-diff-type="removed">
@@ -510,7 +512,7 @@
         <span class="diff-gutter-marker removed">−</span>
         <button class="add-note-btn" data-line="${anchorLine}" title="Add comment">${addNoteIcon}</button>
     </div>
-    <div class="line-content">${escaped}</div>
+    <div class="line-content">${lineHtml}</div>
 </div>\n`;
                 } else if (hunk.type === 'added') {
                     currentLineNum++;
@@ -520,7 +522,7 @@
         <span class="diff-gutter-marker added">+</span>
         <button class="add-note-btn" data-line="${currentLineNum}" title="Add comment">${addNoteIcon}</button>
     </div>
-    <div class="line-content">${escaped}</div>
+    <div class="line-content">${lineHtml}</div>
 </div>\n`;
                 } else {
                     currentLineNum++;
@@ -529,7 +531,7 @@
         <span class="line-number">${currentLineNum}</span>
         <button class="add-note-btn" data-line="${currentLineNum}" title="Add comment">${addNoteIcon}</button>
     </div>
-    <div class="line-content">${escaped}</div>
+    <div class="line-content">${lineHtml}</div>
 </div>\n`;
                 }
             }
@@ -540,6 +542,7 @@
 
     function clearDiff() {
         currentDiffHunks = null;
+        document.body.classList.remove('diff-mode');
     }
 
     // --- Handle messages from extension ---
@@ -572,11 +575,7 @@
         if (msg.type === 'clearDiff') {
             clearDiff();
             diffModeEnabled = false;
-            const toggle = document.getElementById('diff-mode-toggle');
-            if (toggle) {
-                toggle.dataset.enabled = 'false';
-                toggle.textContent = 'OFF';
-            }
+            document.getElementById('diff-mode-toggle')?.setAttribute('aria-checked', 'false');
         }
     });
 
@@ -608,48 +607,48 @@
             item.className = 'history-item' + (rev.revision === currentRevision ? ' active' : '');
             item.dataset.revision = String(rev.revision);
 
-            let pinHtml = '';
-            if (!isLatest) {
-                pinHtml = `<button class="pin-btn${isPinned ? ' pinned' : ''}" data-pin-revision="${rev.revision}" title="${isPinned ? 'Unpin (revert to default)' : 'Set as diff base'}">
-                    <span class="codicon codicon-pin"></span>
-                </button>`;
-            }
+            // Column 2: pin button for non-latest, "current" badge for latest
+            const col2Html = isLatest
+                ? '<span class="history-current-badge">now</span>'
+                : `<button class="pin-btn${isPinned ? ' pinned' : ''}" data-pin-revision="${rev.revision}" title="Set as diff base"><span class="codicon codicon-pin"></span></button>`;
 
+            const countHtml = rev.totalCount === 0 ? '0' : `${rev.addressedCount}/${rev.totalCount}`;
             item.innerHTML = `
-                ${pinHtml}
-                <span class="history-rev">rev${rev.revision}${isLatest ? ' (current)' : ''}</span>
+                <span class="history-rev">rev${rev.revision}</span>
+                ${col2Html}
                 <span class="history-date">${dateStr}</span>
-                <span class="history-count${rev.totalCount > 0 && rev.addressedCount === rev.totalCount ? ' all-addressed' : ''}">${rev.totalCount === 0 ? '0 comments' : rev.addressedCount + '/' + rev.totalCount + ' comment' + (rev.totalCount !== 1 ? 's' : '')}</span>
+                <span class="history-count${rev.totalCount > 0 && rev.addressedCount === rev.totalCount ? ' all-addressed' : ''}">${countHtml}</span>
             `;
             pane.appendChild(item);
         }
 
-        // Swap pane to remove stale click listeners, then add pin handler once
+        // Swap pane to remove stale click listeners, then add single delegated handler
         const freshPane = pane.cloneNode(false);
         while (pane.firstChild) { freshPane.appendChild(pane.firstChild); }
         pane.parentNode.replaceChild(freshPane, pane);
         freshPane.addEventListener('click', (e) => {
+            // Pin button click
             const pinBtn = e.target.closest('.pin-btn');
             if (pinBtn) {
                 const revision = parseInt(pinBtn.dataset.pinRevision, 10);
-                if (revision === pinnedRevision) {
-                    const defaultPin = sorted.length >= 2 ? sorted[1].revision : -1;
-                    if (revision === defaultPin) { return; }
-                    pinnedRevision = defaultPin;
-                } else {
-                    pinnedRevision = revision;
-                }
+                if (revision === pinnedRevision) { return; } // already pinned, no-op
+                pinnedRevision = revision;
                 vscode.postMessage({ type: 'pinVersion', revision: pinnedRevision });
                 renderHistoryPane(revisions, currentRevision);
                 return;
             }
 
+            // Row click
             const item = e.target.closest('.history-item');
-            if (item) {
-                const revision = parseInt(item.dataset.revision, 10);
-                if (!isNaN(revision)) {
-                    vscode.postMessage({ type: 'openRevision', revision });
-                }
+            if (!item) { return; }
+            const revision = parseInt(item.dataset.revision, 10);
+            if (isNaN(revision)) { return; }
+
+            if (diffModeEnabled && revision !== latestRevision) {
+                // In diff mode: use clicked revision as diff base (without locking the pin)
+                vscode.postMessage({ type: 'pinVersion', revision });
+            } else {
+                vscode.postMessage({ type: 'openRevision', revision });
             }
         });
     }
@@ -676,4 +675,36 @@
             }
         }
     }
+
+    // --- Resizable comments pane ---
+    (function () {
+        const handle = document.getElementById('panel-resize-handle');
+        const commentsPane = document.querySelector('.comments-pane');
+        if (!handle || !commentsPane) { return; }
+
+        let startX = 0;
+        let startWidth = 0;
+
+        handle.addEventListener('mousedown', (e) => {
+            startX = e.clientX;
+            startWidth = commentsPane.getBoundingClientRect().width;
+            handle.classList.add('dragging');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!handle.classList.contains('dragging')) { return; }
+            const dx = startX - e.clientX; // dragging left = wider panel
+            const newWidth = Math.max(220, Math.min(700, startWidth + dx));
+            commentsPane.style.width = newWidth + 'px';
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (!handle.classList.contains('dragging')) { return; }
+            handle.classList.remove('dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        });
+    })();
 })();
