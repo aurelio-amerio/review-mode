@@ -290,7 +290,10 @@ body.markdown-content {
 .history-item.diff-current {
     border-left-color: #4ade80;
     background: rgba(74, 222, 128, 0.12);
-    font-weight: 600;
+}
+
+.history-item.diff-current .history-rev {
+    font-weight: 700;
 }
 
 /* Diff mode: red highlight for the diff base revision */
@@ -1211,9 +1214,9 @@ body.diff-mode .line-number {
 .history-item.git-item {
     display: grid;
     grid-template-columns: 52px 1fr auto 58px;
-    gap: 0 6px;
+    gap: 4px;
     align-items: center;
-    padding: 5px 8px;
+    padding: 6px 10px;
     cursor: default;
     border-radius: 4px;
     border-left-width: 3px;
@@ -1223,6 +1226,15 @@ body.diff-mode .line-number {
     min-height: 32px;
 }
 
+/* Diff mode: green left border for current (matches local history style) */
+.history-item.git-item.diff-current {
+    border-left-color: #4ade80;
+}
+
+/* Diff mode: red left border for diff base (matches local history style) */
+.history-item.git-item.diff-base {
+    border-left-color: #f87171;
+}
 
 .git-hash {
     font-family: var(--vscode-editor-font-family, monospace);
