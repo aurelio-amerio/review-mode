@@ -697,7 +697,8 @@
                     gitBtn.classList.remove('disabled');
                 }
             }
-            // Render the correct history tab
+            // Clear any active preview and render the correct history tab
+            activeRef = null;
             if (historyMode === 'local' && lastRevisions) {
                 renderHistoryPane(lastRevisions, lastCurrentRevision);
             }
@@ -735,7 +736,9 @@
             let itemClass = 'history-item';
             if (diffModeEnabled) {
                 if (isLatest) { itemClass += ' diff-current'; }
-                const isDiffBase = activeRef?.type === 'local' ? activeRef.revision === rev.revision : isPinned;
+                const isDiffBase = activeRef?.type === 'local'
+                    ? activeRef.revision === rev.revision
+                    : activeRef === null && isPinned;
                 if (isDiffBase) { itemClass += ' diff-base'; }
             } else {
                 if (rev.revision === currentRevision) { itemClass += ' active'; }
