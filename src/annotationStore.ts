@@ -22,6 +22,8 @@ export interface Annotation {
     status: Status;
     thread: Message[];
     deletedLine?: boolean;
+    previousVersionContext?: string;
+    currentVersionContext?: string;
 }
 
 export interface RevisionEntry {
@@ -252,6 +254,10 @@ export class AnnotationStore {
     /** Get all annotations for the active revision, sorted by start line. */
     getAnnotations(): readonly Annotation[] {
         return this.annotations;
+    }
+
+    saveAfterContextUpdate(): void {
+        this.saveCurrentRevision();
     }
 
     /** Clear all state (used when closing review mode). */
