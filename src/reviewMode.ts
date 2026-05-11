@@ -293,8 +293,8 @@ export class ReviewModeController {
             return;
         }
 
-        // Route by pin type, not history view mode
-        if (this.pinnedRef?.type === 'git') {
+        // Route by pin type only when showing the persisted pin (no override = not a preview)
+        if (overrideRevision === undefined && this.pinnedRef?.type === 'git') {
             void this.sendGitDiffToWebview(originalPath);
             return;
         }
