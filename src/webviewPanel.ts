@@ -664,6 +664,18 @@ export class ReviewWebviewPanel {
                 }
                 break;
             }
+            case 'switchHistoryMode': {
+                this.onSwitchHistoryMode?.(originalPath, msg.mode);
+                break;
+            }
+            case 'pinGitCommit': {
+                this.onPinGitCommit?.(originalPath, msg.commitHash);
+                break;
+            }
+            case 'loadMoreCommits': {
+                this.onLoadMoreCommits?.(originalPath);
+                break;
+            }
         }
     }
 
