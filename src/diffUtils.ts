@@ -1,6 +1,92 @@
 import { diffLines } from 'diff';
 import { Annotation } from './annotationStore';
 
+export interface DiffHunk {
+    type: 'added' | 'removed' | 'unchanged';
+    lines: string[];
+}
+
+export function computeDiffHunks(oldText: string, newText: string): DiffHunk[] {
+    const changes = diffLines(oldText, newText);
+    const hunks: DiffHunk[] = [];
+
+    for (const change of changes) {
+        const lines = change.value ? change.value.replace(/\n$/, '').split('\n') : [];
+        if (change.added) {
+            hunks.push({ type: 'added', lines });
+        } else if (change.removed) {
+            hunks.push({ type: 'removed', lines });
+        } else {
+            hunks.push({ type: 'unchanged', lines });
+        }
+    }
+
+    return hunks;
+}
+
+export function extractDiffContext(
+    hunks: DiffHunk[],
+    currentLineStart: number,
+    currentLineEnd: number,
+    contextLines: number = 3,
+): { previousVersionContext: string; currentVersionContext: string } | null {
+    let currentLineNum = 0;
+    const rows: Array<{ type: 'added' | 'removed' | 'unchanged'; text: string; currentLine: number | null }> = [];
+
+    for (const hunk of hunks) {
+        for (const line of hunk.lines) {
+            if (hunk.type === 'removed') {
+                rows.push({ type: 'removed', text: line, currentLine: null });
+            } else {
+                currentLineNum++;
+                rows.push({ type: hunk.type, text: line, currentLine: currentLineNum });
+            }
+        }
+    }
+
+    let firstRowIdx = -1;
+    let lastRowIdx = -1;
+
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.currentLine !== null && row.currentLine >= currentLineStart && row.currentLine <= currentLineEnd) {
+            if (firstRowIdx === -1) { firstRowIdx = i; }
+            lastRowIdx = i;
+        }
+    }
+
+    if (firstRowIdx === -1) { return null; }
+
+    while (firstRowIdx > 0 && rows[firstRowIdx - 1].type === 'removed') { firstRowIdx--; }
+    while (lastRowIdx < rows.length - 1 && rows[lastRowIdx + 1].type === 'removed') { lastRowIdx++; }
+
+    const hasChange = rows.slice(firstRowIdx, lastRowIdx + 1).some(r => r.type !== 'unchanged');
+    if (!hasChange) { return null; }
+
+    const contextStart = Math.max(0, firstRowIdx - contextLines);
+    const contextEnd = Math.min(rows.length - 1, lastRowIdx + contextLines);
+
+    const previousLines: string[] = [];
+    const currentLines: string[] = [];
+
+    for (let i = contextStart; i <= contextEnd; i++) {
+        const row = rows[i];
+        if (row.type === 'removed') {
+            previousLines.push(`-${row.text}`);
+        } else if (row.type === 'added') {
+            currentLines.push(`+${row.text}`);
+        } else {
+            previousLines.push(` ${row.text}`);
+            currentLines.push(` ${row.text}`);
+        }
+    }
+
+    return {
+        previousVersionContext: previousLines.join('\n'),
+        currentVersionContext: currentLines.join('\n'),
+    };
+}
+
 /**
  * Build a line-number mapping from old line numbers to new line numbers.
  * Returns a Map<oldLine, newLine>. Deleted lines map to -1.

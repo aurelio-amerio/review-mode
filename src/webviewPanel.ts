@@ -5,6 +5,7 @@ import { marked } from 'marked';
 import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
 import { parse as parseYaml } from 'yaml';
 import { AnnotationStore } from './annotationStore';
+import { computeDiffHunks, DiffHunk } from './diffUtils';
 
 // Map file extensions to Shiki language IDs
 const EXT_TO_LANG: Record<string, string> = {
@@ -29,6 +30,10 @@ export class ReviewWebviewPanel {
 
     /** Callback invoked when the user clicks a history entry to open a revision. */
     public onRevisionRequested?: (originalPath: string, revision: number) => void;
+    public onDiffModeToggled?: (originalPath: string, enabled: boolean) => void;
+    public onPinVersion?: (originalPath: string, revision: number) => void;
+    public onRevertToPinnedDiff?: (originalPath: string) => void;
+    public onPreviewDiffBase?: (originalPath: string, revision: number) => void;
 
     constructor(
         private context: vscode.ExtensionContext,
@@ -121,7 +126,7 @@ export class ReviewWebviewPanel {
 
         let bodyContent = '';
         if (isMarkdown) {
-            bodyContent = this.renderMarkdownDocument(content, lines);
+            bodyContent = this.renderMarkdownDocument(lines);
         } else if (lang && this.highlighter) {
             const theme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Light
                 ? 'light-plus' : 'dark-plus';
@@ -174,6 +179,53 @@ export class ReviewWebviewPanel {
         this.panels.get(originalPath)?.panel.webview.postMessage({ type: 'scrollToLine', line });
     }
 
+    postMessageToPanel(originalPath: string, message: any): void {
+        this.panels.get(originalPath)?.panel.webview.postMessage(message);
+    }
+
+    /** Compute diff hunks, apply Shiki syntax highlighting, and send showDiff to the webview. */
+    sendHighlightedDiff(originalPath: string, baseText: string, currentText: string, ext: string): void {
+        const hunks = computeDiffHunks(baseText, currentText);
+        const lang = EXT_TO_LANG[ext];
+
+        if (lang && this.highlighter) {
+            const theme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Light
+                ? 'light-plus' : 'dark-plus';
+            const oldTokens = baseText
+                ? this.highlighter.codeToTokensBase(baseText, { lang: lang as BundledLanguage, theme })
+                : [];
+            const newTokens = this.highlighter.codeToTokensBase(currentText, { lang: lang as BundledLanguage, theme });
+
+            let oldIdx = 0;
+            let newIdx = 0;
+            const highlightedHunks = hunks.map((hunk: DiffHunk) => {
+                const highlightedLines = hunk.lines.map(() => {
+                    let tokens;
+                    if (hunk.type === 'removed') {
+                        tokens = oldTokens[oldIdx++] ?? [];
+                    } else if (hunk.type === 'added') {
+                        tokens = newTokens[newIdx++] ?? [];
+                    } else {
+                        oldIdx++;
+                        tokens = newTokens[newIdx++] ?? [];
+                    }
+                    return tokens.map((t: any) =>
+                        t.color
+                            ? `<span style="color:${t.color}">${this.escapeHtml(t.content)}</span>`
+                            : this.escapeHtml(t.content)
+                    ).join('');
+                });
+                return { type: hunk.type, lines: hunk.lines, highlightedLines };
+            });
+
+            this.panels.get(originalPath)?.panel.webview.postMessage({ type: 'showDiff', hunks: highlightedHunks });
+            this.sendAnnotationUpdate(originalPath);
+        } else {
+            this.panels.get(originalPath)?.panel.webview.postMessage({ type: 'showDiff', hunks });
+            this.sendAnnotationUpdate(originalPath);
+        }
+    }
+
     /** Generate the full HTML for the WebView. */
     private getHtml(snapshotPath: string, panel: vscode.WebviewPanel): string {
         const content = fs.readFileSync(snapshotPath, 'utf-8');
@@ -195,7 +247,7 @@ export class ReviewWebviewPanel {
 
         let bodyContent = '';
         if (isMarkdown) {
-            bodyContent = this.renderMarkdownDocument(content, lines);
+            bodyContent = this.renderMarkdownDocument(lines);
         } else if (lang && this.highlighter) {
             // Syntax-highlighted code using Shiki (VS Code TextMate grammars)
             const theme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Light
@@ -235,10 +287,25 @@ export class ReviewWebviewPanel {
         <div class="code-pane">
             ${bodyContent}
         </div>
-        <div class="comments-pane">
+        <div class="panel-resize-handle" id="panel-resize-handle"></div>
+        <div class="comments-pane"${this.getSavedPanelWidthStyle()}>
             <div class="pane-tabs">
                 <button class="pane-tab active" data-tab="comments">Comments</button>
                 <button class="pane-tab" data-tab="history">History</button>
+            </div>
+            <div class="secondary-toolbar">
+                <div class="toolbar-group">
+                    <label class="toolbar-label">Diff</label>
+                    <div class="toolbar-switch" id="diff-mode-toggle" role="switch" aria-checked="false">
+                        <span class="switch-thumb"></span>
+                    </div>
+                </div>
+                <div class="toolbar-group">
+                    <div class="toolbar-segmented">
+                        <button class="toolbar-seg-btn active" id="history-mode-local">Local</button>
+                        <button class="toolbar-seg-btn disabled" id="history-mode-git" title="Git diffs will be available in a future update." disabled>Git</button>
+                    </div>
+                </div>
             </div>
             <div id="comments-pane-content" class="tab-content active">
                 <div class="comments-empty">No comments yet.<br>Click + on a line to add one.</div>
@@ -357,8 +424,8 @@ export class ReviewWebviewPanel {
 
             html += `<div class="line-container todo-item${isDone ? ' todo-done' : ''}" data-line="${dataLine}" data-end-line="${dataEndLine}">
     <div class="line-gutter">
-        <span class="line-number">${dataLine}</span>
         <button class="add-note-btn" data-line="${dataLine}" title="Add comment"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3l3 3 3-3h3a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm0 9h-3.5L8 12.5 5.5 10H2V2h12v8z"/><path d="M7.25 4v2.25H5v1.5h2.25V10h1.5V7.75H11v-1.5H8.75V4z"/></svg></button>
+        <span class="line-number">${dataLine}</span>
     </div>
     <div class="line-content todo-content">
         <span class="todo-checkbox${isDone ? ' checked' : ''}"></span>
@@ -372,7 +439,7 @@ export class ReviewWebviewPanel {
     }
 
     /** Render full markdown as a document, grouping source lines into blocks with annotation anchors. */
-    private renderMarkdownDocument(content: string, sourceLines: string[]): string {
+    private renderMarkdownDocument(sourceLines: string[]): string {
         // Detect and parse YAML frontmatter
         const { frontmatter, bodyStartIndex, todoLineRanges } = this.parseFrontmatter(sourceLines);
         const todos: Array<{ id?: string; content: string; status?: string }> | null =
@@ -440,8 +507,8 @@ export class ReviewWebviewPanel {
                 // Empty block — collapsed spacer
                 result += `<div class="line-container empty-line" data-line="${block.startLine}">
     <div class="line-gutter">
-        <span class="line-number">${block.startLine}</span>
         <button class="add-note-btn" data-line="${block.startLine}" title="Add comment"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3l3 3 3-3h3a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm0 9h-3.5L8 12.5 5.5 10H2V2h12v8z"/><path d="M7.25 4v2.25H5v1.5h2.25V10h1.5V7.75H11v-1.5H8.75V4z"/></svg></button>
+        <span class="line-number">${block.startLine}</span>
     </div>
     <div class="line-content">&nbsp;</div>
 </div>\n`;
@@ -455,8 +522,8 @@ export class ReviewWebviewPanel {
                     .replace(/\n?<\/[uo]l>$/, '');
                 result += `<div class="line-container md-block md-list-item" data-line="${block.startLine}" data-end-line="${block.endLine}">
     <div class="line-gutter">
-        <span class="line-number">${block.startLine}</span>
         <button class="add-note-btn" data-line="${block.startLine}" title="Add comment"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3l3 3 3-3h3a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm0 9h-3.5L8 12.5 5.5 10H2V2h12v8z"/><path d="M7.25 4v2.25H5v1.5h2.25V10h1.5V7.75H11v-1.5H8.75V4z"/></svg></button>
+        <span class="line-number">${block.startLine}</span>
     </div>
     <div class="line-content">${renderedBlock}</div>
 </div>\n`;
@@ -465,8 +532,8 @@ export class ReviewWebviewPanel {
                 let renderedBlock = (marked.parse(blockText) as string).trim();
                 result += `<div class="line-container md-block" data-line="${block.startLine}" data-end-line="${block.endLine}">
     <div class="line-gutter">
-        <span class="line-number">${block.startLine}</span>
         <button class="add-note-btn" data-line="${block.startLine}" title="Add comment"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3l3 3 3-3h3a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm0 9h-3.5L8 12.5 5.5 10H2V2h12v8z"/><path d="M7.25 4v2.25H5v1.5h2.25V10h1.5V7.75H11v-1.5H8.75V4z"/></svg></button>
+        <span class="line-number">${block.startLine}</span>
     </div>
     <div class="line-content">${renderedBlock}</div>
 </div>\n`;
@@ -485,8 +552,8 @@ export class ReviewWebviewPanel {
     private lineTemplate(lineNum: number, content: string): string {
         return `<div class="line-container" data-line="${lineNum}">
     <div class="line-gutter">
-        <span class="line-number">${lineNum}</span>
         <button class="add-note-btn" data-line="${lineNum}" title="Add comment"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3l3 3 3-3h3a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm0 9h-3.5L8 12.5 5.5 10H2V2h12v8z"/><path d="M7.25 4v2.25H5v1.5h2.25V10h1.5V7.75H11v-1.5H8.75V4z"/></svg></button>
+        <span class="line-number">${lineNum}</span>
     </div>
     <div class="line-content">${content}</div>
 </div>\n`;
@@ -539,7 +606,13 @@ export class ReviewWebviewPanel {
                 const content = fs.readFileSync(ctx.snapshotPath, 'utf-8');
                 const lines = content.split('\n');
                 const previewLine = lines[msg.startLine - 1]?.trim() || '';
-                this.store.addAnnotation(msg.startLine, msg.endLine, previewLine, msg.text);
+                const annotation = this.store.addAnnotation(msg.startLine, msg.endLine, previewLine, msg.text);
+                const isNewAnnotation = annotation.thread.length === 1;
+                if (isNewAnnotation && msg.previousVersionContext && msg.currentVersionContext) {
+                    annotation.previousVersionContext = msg.previousVersionContext;
+                    annotation.currentVersionContext = msg.currentVersionContext;
+                    this.store.saveAfterContextUpdate();
+                }
                 break;
             }
             case 'reply': {
@@ -564,6 +637,28 @@ export class ReviewWebviewPanel {
             }
             case 'openRevision': {
                 this.onRevisionRequested?.(originalPath, msg.revision);
+                break;
+            }
+            case 'toggleDiffMode': {
+                this.onDiffModeToggled?.(originalPath, !!msg.enabled);
+                break;
+            }
+            case 'pinVersion': {
+                this.onPinVersion?.(originalPath, msg.revision);
+                break;
+            }
+            case 'revertToPinnedDiff': {
+                this.onRevertToPinnedDiff?.(originalPath);
+                break;
+            }
+            case 'previewDiffBase': {
+                this.onPreviewDiffBase?.(originalPath, msg.revision);
+                break;
+            }
+            case 'savePanelWidth': {
+                if (typeof msg.width === 'number') {
+                    this.context.globalState.update('reviewMode.panelWidth', msg.width);
+                }
                 break;
             }
         }
@@ -606,6 +701,11 @@ export class ReviewWebviewPanel {
             this.activeRevisionsPath = ctx.revisionsPath;
             this.store.load(ctx.revisionsPath);
         }
+    }
+
+    private getSavedPanelWidthStyle(): string {
+        const savedWidth = this.context.globalState.get<number>('reviewMode.panelWidth');
+        return savedWidth ? ` style="width:${savedWidth}px"` : '';
     }
 
     private escapeHtml(text: string): string {

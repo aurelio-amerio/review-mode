@@ -10,6 +10,8 @@ export class ReviewModeController {
     private webview: ReviewWebviewPanel;
     private plansDir: string = '';
     private revisionsPath: string = '';
+    private diffModeEnabled: boolean = false;
+    private pinnedRevision: number = -1;
 
     constructor(
         private store: AnnotationStore,
@@ -17,6 +19,31 @@ export class ReviewModeController {
     ) {
         this.webview = new ReviewWebviewPanel(context, store);
         this.webview.onRevisionRequested = (originalPath: string, revision: number) => this.openRevision(originalPath, revision);
+        this.webview.onDiffModeToggled = (originalPath: string, enabled: boolean) => {
+            this.diffModeEnabled = enabled;
+            if (enabled) {
+                const revisions = this.store.getRevisions();
+                if (revisions.length >= 2 && this.pinnedRevision < 0) {
+                    this.pinnedRevision = revisions.length - 2;
+                }
+            }
+            this.sendDiffToWebview(originalPath);
+        };
+
+        this.webview.onPinVersion = (originalPath: string, revision: number) => {
+            this.pinnedRevision = revision;
+            this.sendDiffToWebview(originalPath);
+        };
+
+        this.webview.onRevertToPinnedDiff = (originalPath: string) => {
+            // Re-send diff using the actual pinned revision (not a temporary preview)
+            this.sendDiffToWebview(originalPath);
+        };
+
+        this.webview.onPreviewDiffBase = (originalPath: string, revision: number) => {
+            // Temporarily show diff from this revision without changing the actual pin
+            this.sendDiffToWebview(originalPath, revision);
+        };
     }
 
     /** Open a file in review mode.
@@ -145,6 +172,10 @@ export class ReviewModeController {
         // Open the WebView with the latest snapshot
         await this.webview.show(originalUri.fsPath, snapshotPath, revisionsPath, fileName);
 
+        // Reset diff state
+        this.diffModeEnabled = false;
+        this.pinnedRevision = -1;
+
         // Set context for when-clauses
         await vscode.commands.executeCommand('setContext', 'reviewMode.active', true);
     }
@@ -180,6 +211,36 @@ export class ReviewModeController {
         if (sourcePath) {
             this.webview.scrollToLine(sourcePath, line);
         }
+    }
+
+    private sendDiffToWebview(originalPath: string, overrideRevision?: number): void {
+        if (!this.diffModeEnabled) {
+            this.webview.postMessageToPanel(originalPath, { type: 'clearDiff' });
+            const revisions = this.store.getRevisions();
+            if (revisions.length > 0) {
+                const plansDir = this.store.getPlansDir();
+                const latest = revisions[revisions.length - 1];
+                this.webview.refreshContent(originalPath, path.join(plansDir, latest.snapshotFile));
+            }
+            return;
+        }
+
+        const revisions = this.store.getRevisions();
+        if (revisions.length === 0) { return; }
+
+        const plansDir = this.store.getPlansDir();
+        const latestRevision = revisions[revisions.length - 1];
+        const latestSnapshotPath = path.join(plansDir, latestRevision.snapshotFile);
+        const currentText = fs.readFileSync(latestSnapshotPath, 'utf-8');
+
+        const baseRevIdx = overrideRevision !== undefined ? overrideRevision : this.pinnedRevision;
+        let baseText = '';
+        if (baseRevIdx >= 0 && baseRevIdx < revisions.length) {
+            const baseSnapshotPath = path.join(plansDir, revisions[baseRevIdx].snapshotFile);
+            baseText = fs.readFileSync(baseSnapshotPath, 'utf-8');
+        }
+
+        this.webview.sendHighlightedDiff(originalPath, baseText, currentText, path.extname(originalPath).toLowerCase());
     }
 
     isActive(): boolean {
