@@ -14,8 +14,8 @@
     let diffModeEnabled = false;
     /** @type {Array<{type: string, lines: string[]}>|null} */
     let currentDiffHunks = null;
-    /** @type {number} */
-    let pinnedRevision = -1;
+    /** @type {{type: 'local', revision: number} | {type: 'git', hash: string} | null} */
+    let pinnedRef = null;
     /** @type {number|null} */
     let activeDiffBase = null;
     /** @type {Array|null} */
@@ -28,8 +28,6 @@
     let gitHistory = [];
     /** @type {boolean} */
     let hasMoreGitCommits = false;
-    /** @type {string|null} */
-    let pinnedGitCommitHash = null;
     /** @type {boolean} */
     let hasWorkingCopy = false;
     /** @type {boolean} */
@@ -48,9 +46,16 @@
         state.activeTab = tabId;
         vscode.setState(state);
 
-        // When switching away from history tab with diff mode on,
-        // revert to showing the pinned version diff (not a temporary preview)
-        if (tabId === 'comments' && diffModeEnabled) {
+        // When switching away from history, sync Local/Git button to pin type
+        // and revert any active preview back to the pinned diff
+        if (tabId !== 'history' && diffModeEnabled) {
+            const pinType = pinnedRef?.type ?? 'local';
+            const localBtn = document.getElementById('history-mode-local');
+            const gitBtn = document.getElementById('history-mode-git');
+            if (localBtn) { localBtn.classList.toggle('active', pinType === 'local'); }
+            if (gitBtn) { gitBtn.classList.toggle('active', pinType === 'git'); }
+            historyMode = pinType;
+            activeDiffBase = null;
             vscode.postMessage({ type: 'revertToPinnedDiff' });
         }
     }
@@ -112,7 +117,6 @@
         if (newMode === 'git') {
             gitHistory = [];
             hasMoreGitCommits = false;
-            pinnedGitCommitHash = null;
             hasWorkingCopy = false;
         }
 
@@ -665,7 +669,9 @@
             gitHistory = msg.commits || [];
             hasMoreGitCommits = !!msg.hasMore;
             hasWorkingCopy = !!msg.hasWorkingCopy;
-            pinnedGitCommitHash = msg.pinnedCommitHash || null;
+            if (msg.pinnedRef !== undefined) {
+                pinnedRef = msg.pinnedRef;
+            }
             renderGitHistoryPane();
         }
         if (msg.type === 'appendGitHistory') {
@@ -674,13 +680,9 @@
             renderGitHistoryPane();
         }
         if (msg.type === 'restoreDiffState') {
-            // Extension tells us to restore mode + pin state when diff is toggled on
             historyMode = msg.mode || 'local';
-            if (msg.pinnedRevision !== undefined && msg.pinnedRevision !== null) {
-                pinnedRevision = msg.pinnedRevision;
-            }
-            if (msg.pinnedGitCommitHash !== undefined) {
-                pinnedGitCommitHash = msg.pinnedGitCommitHash;
+            if (msg.pinnedRef !== undefined) {
+                pinnedRef = msg.pinnedRef;
             }
             // Update segmented buttons
             const localBtn = document.getElementById('history-mode-local');
@@ -716,9 +718,9 @@
         // Reverse chronological: latest first
         const sorted = [...revisions].sort((a, b) => b.revision - a.revision);
         const latestRevision = sorted[0].revision;
-        // Default pin to N-1 if not yet set
-        if (pinnedRevision < 0 && sorted.length >= 2) {
-            pinnedRevision = sorted[1].revision;
+        // Default pin to N-1 if no pin exists yet
+        if (pinnedRef === null && sorted.length >= 2) {
+            pinnedRef = { type: 'local', revision: sorted[1].revision };
         }
 
         pane.innerHTML = '';
@@ -727,7 +729,7 @@
             const date = new Date(rev.createdAt);
             const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             const isLatest = rev.revision === latestRevision;
-            const isPinned = rev.revision === pinnedRevision;
+            const isPinned = pinnedRef?.type === 'local' && rev.revision === pinnedRef.revision;
             const item = document.createElement('div');
             let itemClass = 'history-item';
             if (diffModeEnabled) {
@@ -768,10 +770,9 @@
             const pinBtn = e.target.closest('.pin-btn');
             if (pinBtn) {
                 const revision = parseInt(pinBtn.dataset.pinRevision, 10);
-                if (revision === pinnedRevision) { return; } // already pinned, no-op
-                pinnedRevision = revision;
-                pinnedGitCommitHash = null;  // single-pin: clear the other mode's pin
-                vscode.postMessage({ type: 'pinVersion', revision: pinnedRevision });
+                if (pinnedRef?.type === 'local' && revision === pinnedRef.revision) { return; }
+                pinnedRef = { type: 'local', revision };
+                vscode.postMessage({ type: 'pinVersion', revision });
                 renderHistoryPane(revisions, currentRevision);
                 return;
             }
@@ -832,7 +833,7 @@
         const startIdx = hasWorkingCopy ? 0 : 1;
         for (let i = startIdx; i < gitHistory.length; i++) {
             const commit = gitHistory[i];
-            const isPinned = commit.hash === pinnedGitCommitHash;
+            const isPinned = pinnedRef?.type === 'git' && commit.hash === pinnedRef.hash;
             const baseClass = diffModeEnabled && isPinned ? ' diff-base' : '';
 
             // Last column: pin button only in diff mode
@@ -867,9 +868,8 @@
             const pinBtn = e.target.closest('[data-pin-commit]');
             if (pinBtn) {
                 const commitHash = pinBtn.dataset.pinCommit;
-                if (commitHash === pinnedGitCommitHash) { return; }
-                pinnedGitCommitHash = commitHash;
-                pinnedRevision = -1;  // single-pin: clear the other mode's pin
+                if (pinnedRef?.type === 'git' && commitHash === pinnedRef.hash) { return; }
+                pinnedRef = { type: 'git', hash: commitHash };
                 vscode.postMessage({ type: 'pinGitCommit', commitHash });
                 renderGitHistoryPane();
                 return;
