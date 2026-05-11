@@ -23,6 +23,7 @@ export class ReviewModeController {
     private historyMode: 'local' | 'git' = 'local';
     private suppressPinWarningForSession: boolean = false;
     private suppressedPinTargets: Set<string> = new Set();
+    private isPinWarningActive: boolean = false;
     private gitPage: number = 0;
     private readonly gitPageSize: number = 20;
     private isGitAvailable: boolean = false;
@@ -234,6 +235,7 @@ export class ReviewModeController {
         this.pinnedRef = null;
         this.suppressPinWarningForSession = false;
         this.suppressedPinTargets = new Set();
+        this.isPinWarningActive = false;
 
         // Reset git-mode state and detect git availability
         this.historyMode = 'local';
@@ -299,63 +301,74 @@ export class ReviewModeController {
      * Handles per-target and per-session suppression.
      */
     private async checkPinWarning(originalPath: string, targetKey: string): Promise<boolean> {
-        if (this.suppressPinWarningForSession) { return true; }
-        if (this.suppressedPinTargets.has(targetKey)) { return true; }
+        if (this.isPinWarningActive) { return false; }
+        this.isPinWarningActive = true;
+        try {
+            if (this.suppressPinWarningForSession) { return true; }
+            if (this.suppressedPinTargets.has(targetKey)) { return true; }
 
-        const annotations = [...this.store.getAnnotations()];
-        if (annotations.length === 0) { return true; }
+            const annotations = [...this.store.getAnnotations()];
+            if (annotations.length === 0) { return true; }
 
-        // Compute current diff relative to the existing pin
-        const revisions = this.store.getRevisions();
-        if (revisions.length === 0) { return true; }
+            // Compute current diff relative to the existing pin
+            const revisions = this.store.getRevisions();
+            if (revisions.length === 0) { return true; }
 
-        const plansDir = this.store.getPlansDir();
-        const currentText = fs.readFileSync(
-            path.join(plansDir, revisions[revisions.length - 1].snapshotFile), 'utf-8'
-        );
+            let hunks: ReturnType<typeof computeDiffHunks>;
+            try {
+                const plansDir = this.store.getPlansDir();
+                const currentText = fs.readFileSync(
+                    path.join(plansDir, revisions[revisions.length - 1].snapshotFile), 'utf-8'
+                );
 
-        let baseText = '';
-        if (this.pinnedRef?.type === 'local') {
-            const idx = this.pinnedRef.revision;
-            if (idx >= 0 && idx < revisions.length) {
-                baseText = fs.readFileSync(path.join(plansDir, revisions[idx].snapshotFile), 'utf-8');
+                let baseText = '';
+                if (this.pinnedRef?.type === 'local') {
+                    const idx = this.pinnedRef.revision;
+                    if (idx < 0 || idx >= revisions.length) { return true; }
+                    baseText = fs.readFileSync(path.join(plansDir, revisions[idx].snapshotFile), 'utf-8');
+                } else if (this.pinnedRef?.type === 'git') {
+                    // TODO: support git pins — would require calling getGitFileContent for the base text
+                    return true;
+                } else {
+                    return true;
+                }
+
+                hunks = computeDiffHunks(baseText, currentText);
+            } catch {
+                return true;
             }
-        } else if (this.pinnedRef?.type === 'git') {
-            // For git pins we skip the check — git base text would require a git show call
+
+            const changedLines = getChangedCurrentLines(hunks);
+            if (changedLines.size === 0) { return true; }
+
+            const overlapping = annotations.filter(a => {
+                for (let l = a.startLine; l <= a.endLine; l++) {
+                    if (changedLines.has(l)) { return true; }
+                }
+                return false;
+            });
+            if (overlapping.length === 0) { return true; }
+
+            const lineList = [...new Set(overlapping.flatMap(a =>
+                Array.from({ length: a.endLine - a.startLine + 1 }, (_, i) => a.startLine + i)
+                    .filter(l => changedLines.has(l))
+            ))].sort((a, b) => a - b).slice(0, 10).join(', ');
+
+            const choice = await vscode.window.showWarningMessage(
+                `Changing the diff base may affect ${overlapping.length} comment(s) on lines ${lineList}. Continue?`,
+                'Change base',
+                'Skip for this target',
+                'Skip for session',
+                'Cancel',
+            );
+
+            if (!choice || choice === 'Cancel') { return false; }
+            if (choice === 'Skip for this target') { this.suppressedPinTargets.add(targetKey); }
+            if (choice === 'Skip for session') { this.suppressPinWarningForSession = true; }
             return true;
-        } else {
-            return true;
+        } finally {
+            this.isPinWarningActive = false;
         }
-
-        const hunks = computeDiffHunks(baseText, currentText);
-        const changedLines = getChangedCurrentLines(hunks);
-        if (changedLines.size === 0) { return true; }
-
-        const overlapping = annotations.filter(a => {
-            for (let l = a.startLine; l <= a.endLine; l++) {
-                if (changedLines.has(l)) { return true; }
-            }
-            return false;
-        });
-        if (overlapping.length === 0) { return true; }
-
-        const lineList = [...new Set(overlapping.flatMap(a =>
-            Array.from({ length: a.endLine - a.startLine + 1 }, (_, i) => a.startLine + i)
-                .filter(l => changedLines.has(l))
-        ))].sort((a, b) => a - b).slice(0, 10).join(', ');
-
-        const choice = await vscode.window.showWarningMessage(
-            `Changing the diff base may affect ${overlapping.length} comment(s) on lines ${lineList}. Continue?`,
-            'Change base',
-            'Skip for this target',
-            'Skip for session',
-            'Cancel',
-        );
-
-        if (!choice || choice === 'Cancel') { return false; }
-        if (choice === 'Skip for this target') { this.suppressedPinTargets.add(targetKey); }
-        if (choice === 'Skip for session') { this.suppressPinWarningForSession = true; }
-        return true;
     }
 
     private sendDiffToWebview(originalPath: string, overrideRevision?: number): void {
