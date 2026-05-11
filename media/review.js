@@ -770,6 +770,7 @@
                 const revision = parseInt(pinBtn.dataset.pinRevision, 10);
                 if (revision === pinnedRevision) { return; } // already pinned, no-op
                 pinnedRevision = revision;
+                pinnedGitCommitHash = null;  // single-pin: clear the other mode's pin
                 vscode.postMessage({ type: 'pinVersion', revision: pinnedRevision });
                 renderHistoryPane(revisions, currentRevision);
                 return;
@@ -868,6 +869,7 @@
                 const commitHash = pinBtn.dataset.pinCommit;
                 if (commitHash === pinnedGitCommitHash) { return; }
                 pinnedGitCommitHash = commitHash;
+                pinnedRevision = -1;  // single-pin: clear the other mode's pin
                 vscode.postMessage({ type: 'pinGitCommit', commitHash });
                 renderGitHistoryPane();
                 return;

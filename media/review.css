@@ -274,6 +274,7 @@ body.markdown-content {
     align-items: center;
     justify-content: center;
     min-width: 28px;
+    height: 22px;
 }
 
 .history-item:hover {
@@ -288,13 +289,13 @@ body.markdown-content {
 /* Diff mode: green highlight for the current (latest) revision */
 .history-item.diff-current {
     border-left-color: #4ade80;
-    background: rgba(74, 222, 128, 0.1);
+    background: rgba(74, 222, 128, 0.18);
 }
 
 /* Diff mode: red highlight for the diff base revision */
 .history-item.diff-base {
     border-left-color: #f87171;
-    background: rgba(248, 113, 113, 0.1);
+    background: rgba(248, 113, 113, 0.18);
 }
 
 .history-rev {
