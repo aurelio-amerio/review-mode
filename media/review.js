@@ -14,6 +14,8 @@
     let diffModeEnabled = false;
     /** @type {Array<{type: string, lines: string[]}>|null} */
     let currentDiffHunks = null;
+    /** @type {number} */
+    let pinnedRevision = -1;
 
     // --- Tab switching & State ---
     function activateTab(tabId) {
@@ -516,22 +518,70 @@
             pane.innerHTML = '<div class="history-empty">No revisions yet.</div>';
             return;
         }
+
+        // Reverse chronological: latest first
+        const sorted = [...revisions].sort((a, b) => b.revision - a.revision);
+        const latestRevision = sorted[0].revision;
+        // Default pin to N-1 if not yet set
+        if (pinnedRevision < 0 && sorted.length >= 2) {
+            pinnedRevision = sorted[1].revision;
+        }
+
         pane.innerHTML = '';
-        for (const rev of revisions) {
+
+        for (const rev of sorted) {
             const date = new Date(rev.createdAt);
             const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const isLatest = rev.revision === latestRevision;
+            const isPinned = rev.revision === pinnedRevision;
             const item = document.createElement('div');
             item.className = 'history-item' + (rev.revision === currentRevision ? ' active' : '');
+            item.dataset.revision = String(rev.revision);
+
+            let pinHtml = '';
+            if (!isLatest) {
+                pinHtml = `<button class="pin-btn${isPinned ? ' pinned' : ''}" data-pin-revision="${rev.revision}" title="${isPinned ? 'Unpin (revert to default)' : 'Set as diff base'}">
+                    <span class="codicon codicon-pin"></span>
+                </button>`;
+            }
+
             item.innerHTML = `
-                <span class="history-rev">rev${rev.revision}</span>
+                ${pinHtml}
+                <span class="history-rev">rev${rev.revision}${isLatest ? ' (current)' : ''}</span>
                 <span class="history-date">${dateStr}</span>
                 <span class="history-count${rev.totalCount > 0 && rev.addressedCount === rev.totalCount ? ' all-addressed' : ''}">${rev.totalCount === 0 ? '0 comments' : rev.addressedCount + '/' + rev.totalCount + ' comment' + (rev.totalCount !== 1 ? 's' : '')}</span>
             `;
-            item.addEventListener('click', () => {
-                vscode.postMessage({ type: 'openRevision', revision: rev.revision });
-            });
             pane.appendChild(item);
         }
+
+        // Swap pane to remove stale click listeners, then add pin handler once
+        const freshPane = pane.cloneNode(false);
+        while (pane.firstChild) { freshPane.appendChild(pane.firstChild); }
+        pane.parentNode.replaceChild(freshPane, pane);
+        freshPane.addEventListener('click', (e) => {
+            const pinBtn = e.target.closest('.pin-btn');
+            if (pinBtn) {
+                const revision = parseInt(pinBtn.dataset.pinRevision, 10);
+                if (revision === pinnedRevision) {
+                    const defaultPin = sorted.length >= 2 ? sorted[1].revision : -1;
+                    if (revision === defaultPin) { return; }
+                    pinnedRevision = defaultPin;
+                } else {
+                    pinnedRevision = revision;
+                }
+                vscode.postMessage({ type: 'pinVersion', revision: pinnedRevision });
+                renderHistoryPane(revisions, currentRevision);
+                return;
+            }
+
+            const item = e.target.closest('.history-item');
+            if (item) {
+                const revision = parseInt(item.dataset.revision, 10);
+                if (!isNaN(revision)) {
+                    vscode.postMessage({ type: 'openRevision', revision });
+                }
+            }
+        });
     }
 
     function updateAnnotationHighlights(annotations) {
