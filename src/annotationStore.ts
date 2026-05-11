@@ -33,10 +33,13 @@ export interface RevisionEntry {
     createdAt: string;         // ISO 8601
 }
 
+export type PinnedRef =
+    | { type: 'local'; revision: number }
+    | { type: 'git'; hash: string };
+
 export interface DiffState {
-    mode: 'local' | 'git';                // which history mode was active
-    localPinnedRevision?: number;          // pinned revision index (local mode)
-    gitPinnedCommitHash?: string;          // pinned commit SHA (git mode)
+    mode: 'local' | 'git';
+    pinnedRef?: PinnedRef;
 }
 
 export interface RevisionsFile {
@@ -136,7 +139,19 @@ export class AnnotationStore {
 
     /** Get the persisted diff state (mode + pinned reference). */
     getDiffState(): DiffState | undefined {
-        return this.revisionsData?.diffState;
+        const raw = this.revisionsData?.diffState as any;
+        if (!raw) { return undefined; }
+        // Migrate old on-disk format (pre-PinnedRef)
+        if (!raw.pinnedRef) {
+            if (raw.localPinnedRevision !== undefined) {
+                return { mode: raw.mode, pinnedRef: { type: 'local', revision: raw.localPinnedRevision } };
+            }
+            if (raw.gitPinnedCommitHash) {
+                return { mode: raw.mode, pinnedRef: { type: 'git', hash: raw.gitPinnedCommitHash } };
+            }
+            return { mode: raw.mode };
+        }
+        return raw as DiffState;
     }
 
     /** Persist the current diff state (mode + pinned reference). */

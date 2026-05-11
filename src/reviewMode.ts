@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import { AnnotationStore } from './annotationStore';
+import { AnnotationStore, PinnedRef } from './annotationStore';
 import { ReviewWebviewPanel } from './webviewPanel';
 import { migrateAnnotations } from './diffUtils';
 import {
@@ -19,9 +19,8 @@ export class ReviewModeController {
     private plansDir: string = '';
     private revisionsPath: string = '';
     private diffModeEnabled: boolean = false;
-    private pinnedRevision: number = -1;
+    private pinnedRef: PinnedRef | null = null;
     private historyMode: 'local' | 'git' = 'local';
-    private pinnedCommitHash: string | null = null;
     private gitPage: number = 0;
     private readonly gitPageSize: number = 20;
     private isGitAvailable: boolean = false;
@@ -47,12 +46,8 @@ export class ReviewModeController {
         };
 
         this.webview.onPinVersion = (originalPath: string, revision: number) => {
-            this.pinnedRevision = revision;
-            this.pinnedCommitHash = null;  // single-pin: clear the other mode's pin
-            this.store.setDiffState({
-                mode: 'local',
-                localPinnedRevision: revision,
-            });
+            this.pinnedRef = { type: 'local', revision };
+            this.store.setDiffState({ mode: 'local', pinnedRef: this.pinnedRef });
             this.sendDiffToWebview(originalPath);
         };
 
@@ -68,30 +63,22 @@ export class ReviewModeController {
 
         this.webview.onSwitchHistoryMode = async (originalPath: string, mode: 'local' | 'git') => {
             this.historyMode = mode;
-            // Persist mode switch — pin references are unchanged (single-pin model)
-            this.store.setDiffState({
-                mode,
-                localPinnedRevision: this.pinnedRevision >= 0 ? this.pinnedRevision : undefined,
-                gitPinnedCommitHash: this.pinnedCommitHash ?? undefined,
-            });
+            this.store.setDiffState({ mode, pinnedRef: this.pinnedRef ?? undefined });
             if (mode === 'git') {
                 this.gitPage = 0;
                 await this.sendGitHistory(originalPath);
             } else {
                 this.webview.sendHistoryUpdatePublic(originalPath);
-                if (this.diffModeEnabled) {
-                    this.sendDiffToWebview(originalPath);
-                }
+            }
+            // Resend pinned diff after mode switch to clear any active preview
+            if (this.diffModeEnabled) {
+                this.sendDiffToWebview(originalPath);
             }
         };
 
         this.webview.onPinGitCommit = (originalPath: string, commitHash: string) => {
-            this.pinnedCommitHash = commitHash;
-            this.pinnedRevision = -1;  // single-pin: clear the other mode's pin
-            this.store.setDiffState({
-                mode: 'git',
-                gitPinnedCommitHash: commitHash,
-            });
+            this.pinnedRef = { type: 'git', hash: commitHash };
+            this.store.setDiffState({ mode: 'git', pinnedRef: this.pinnedRef });
             void this.sendGitDiffToWebview(originalPath);
         };
 
@@ -234,11 +221,10 @@ export class ReviewModeController {
 
         // Reset diff state
         this.diffModeEnabled = false;
-        this.pinnedRevision = -1;
+        this.pinnedRef = null;
 
         // Reset git-mode state and detect git availability
         this.historyMode = 'local';
-        this.pinnedCommitHash = null;
         this.gitPage = 0;
         this.gitRepoRoot = '';
         this.gitRelPath = '';
@@ -254,14 +240,8 @@ export class ReviewModeController {
 
         // Pre-load persisted diff state into controller fields (will be applied when diff is toggled on)
         const savedDiffState = this.store.getDiffState();
-        if (savedDiffState) {
-            if (savedDiffState.localPinnedRevision !== undefined) {
-                this.pinnedRevision = savedDiffState.localPinnedRevision;
-            }
-            if (savedDiffState.gitPinnedCommitHash !== undefined) {
-                this.pinnedCommitHash = savedDiffState.gitPinnedCommitHash;
-            }
-            // historyMode stays 'local' — it will be restored when diff is toggled on via restoreDiffStateFromStore()
+        if (savedDiffState?.pinnedRef) {
+            this.pinnedRef = savedDiffState.pinnedRef;
         }
 
         // Set context for when-clauses
@@ -313,7 +293,8 @@ export class ReviewModeController {
             return;
         }
 
-        if (this.historyMode === 'git') {
+        // Route by pin type, not history view mode
+        if (this.pinnedRef?.type === 'git') {
             void this.sendGitDiffToWebview(originalPath);
             return;
         }
@@ -326,7 +307,9 @@ export class ReviewModeController {
         const latestSnapshotPath = path.join(plansDir, latestRevision.snapshotFile);
         const currentText = fs.readFileSync(latestSnapshotPath, 'utf-8');
 
-        const baseRevIdx = overrideRevision !== undefined ? overrideRevision : this.pinnedRevision;
+        const baseRevIdx = overrideRevision !== undefined
+            ? overrideRevision
+            : (this.pinnedRef?.type === 'local' ? this.pinnedRef.revision : -1);
         let baseText = '';
         if (baseRevIdx >= 0 && baseRevIdx < revisions.length) {
             const baseSnapshotPath = path.join(plansDir, revisions[baseRevIdx].snapshotFile);
@@ -345,11 +328,12 @@ export class ReviewModeController {
             const hasMore = commits.length === this.gitPageSize;
             const workingCopy = await hasUncommittedChanges(originalPath);
 
-            if (this.pinnedCommitHash === null) {
+            // Auto-pin only when there is no pin at all; preserve existing local pins
+            if (this.pinnedRef === null) {
                 if (workingCopy && commits.length >= 1) {
-                    this.pinnedCommitHash = commits[0].hash;
+                    this.pinnedRef = { type: 'git', hash: commits[0].hash };
                 } else if (!workingCopy && commits.length >= 2) {
-                    this.pinnedCommitHash = commits[1].hash;
+                    this.pinnedRef = { type: 'git', hash: commits[1].hash };
                 }
             }
 
@@ -358,10 +342,10 @@ export class ReviewModeController {
                 commits,
                 hasMore,
                 hasWorkingCopy: workingCopy,
-                pinnedCommitHash: this.pinnedCommitHash,
+                pinnedRef: this.pinnedRef,
             });
 
-            if (this.diffModeEnabled && this.pinnedCommitHash) {
+            if (this.diffModeEnabled && this.pinnedRef?.type === 'git') {
                 void this.sendGitDiffToWebview(originalPath);
             }
         } catch (err) {
@@ -385,7 +369,7 @@ export class ReviewModeController {
     }
 
     private async sendGitDiffToWebview(originalPath: string, overrideCommitHash?: string): Promise<void> {
-        const commitHash = overrideCommitHash ?? this.pinnedCommitHash;
+        const commitHash = overrideCommitHash ?? (this.pinnedRef?.type === 'git' ? this.pinnedRef.hash : null);
         if (!this.diffModeEnabled || !commitHash) { return; }
         try {
             const baseText = await getGitFileContent(
@@ -404,31 +388,25 @@ export class ReviewModeController {
         const savedState = this.store.getDiffState();
         if (savedState) {
             this.historyMode = savedState.mode;
-            if (savedState.localPinnedRevision !== undefined) {
-                this.pinnedRevision = savedState.localPinnedRevision;
-            }
-            if (savedState.gitPinnedCommitHash !== undefined) {
-                this.pinnedCommitHash = savedState.gitPinnedCommitHash;
+            if (savedState.pinnedRef) {
+                this.pinnedRef = savedState.pinnedRef;
             }
         } else {
             // No persisted state: default to local with N-1 pin
             this.historyMode = 'local';
             const revisions = this.store.getRevisions();
-            if (revisions.length >= 2 && this.pinnedRevision < 0) {
-                this.pinnedRevision = revisions.length - 2;
+            if (revisions.length >= 2 && this.pinnedRef === null) {
+                this.pinnedRef = { type: 'local', revision: revisions.length - 2 };
             }
         }
 
-        // Notify webview to update UI (segmented button, history tab)
         this.webview.postMessageToPanel(originalPath, {
             type: 'restoreDiffState',
             mode: this.historyMode,
-            pinnedRevision: this.pinnedRevision,
-            pinnedGitCommitHash: this.pinnedCommitHash,
+            pinnedRef: this.pinnedRef,
             isGitAvailable: this.isGitAvailable,
         });
 
-        // If restoring to git mode, fetch git history
         if (this.historyMode === 'git') {
             this.gitPage = 0;
             void this.sendGitHistory(originalPath);
