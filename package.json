@@ -64,7 +64,10 @@
       {
         "command": "reviewMode.open",
         "title": "Review Mode: Open File",
-        "icon": "$(comment-discussion~charts.blue)"
+        "icon": {
+          "light": "media/comment-discussion-blue.svg",
+          "dark": "media/comment-discussion-blue.svg"
+        }
       },
       {
         "command": "reviewMode.close",
