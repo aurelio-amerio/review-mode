@@ -29,6 +29,8 @@ export class ReviewWebviewPanel {
 
     /** Callback invoked when the user clicks a history entry to open a revision. */
     public onRevisionRequested?: (originalPath: string, revision: number) => void;
+    public onDiffModeToggled?: (originalPath: string, enabled: boolean) => void;
+    public onPinVersion?: (originalPath: string, revision: number) => void;
 
     constructor(
         private context: vscode.ExtensionContext,
@@ -174,6 +176,10 @@ export class ReviewWebviewPanel {
         this.panels.get(originalPath)?.panel.webview.postMessage({ type: 'scrollToLine', line });
     }
 
+    postMessageToPanel(originalPath: string, message: any): void {
+        this.panels.get(originalPath)?.panel.webview.postMessage(message);
+    }
+
     /** Generate the full HTML for the WebView. */
     private getHtml(snapshotPath: string, panel: vscode.WebviewPanel): string {
         const content = fs.readFileSync(snapshotPath, 'utf-8');
@@ -239,6 +245,18 @@ export class ReviewWebviewPanel {
             <div class="pane-tabs">
                 <button class="pane-tab active" data-tab="comments">Comments</button>
                 <button class="pane-tab" data-tab="history">History</button>
+            </div>
+            <div class="secondary-toolbar">
+                <div class="toolbar-group">
+                    <label class="toolbar-label">Diff</label>
+                    <button class="toolbar-toggle" id="diff-mode-toggle" data-enabled="false">OFF</button>
+                </div>
+                <div class="toolbar-group">
+                    <div class="toolbar-segmented">
+                        <button class="toolbar-seg-btn active" id="history-mode-local">Local</button>
+                        <button class="toolbar-seg-btn disabled" id="history-mode-git" title="Git diffs will be available in a future update." disabled>Git</button>
+                    </div>
+                </div>
             </div>
             <div id="comments-pane-content" class="tab-content active">
                 <div class="comments-empty">No comments yet.<br>Click + on a line to add one.</div>
@@ -539,7 +557,12 @@ export class ReviewWebviewPanel {
                 const content = fs.readFileSync(ctx.snapshotPath, 'utf-8');
                 const lines = content.split('\n');
                 const previewLine = lines[msg.startLine - 1]?.trim() || '';
-                this.store.addAnnotation(msg.startLine, msg.endLine, previewLine, msg.text);
+                const annotation = this.store.addAnnotation(msg.startLine, msg.endLine, previewLine, msg.text);
+                if (msg.previousVersionContext && msg.currentVersionContext) {
+                    annotation.previousVersionContext = msg.previousVersionContext;
+                    annotation.currentVersionContext = msg.currentVersionContext;
+                    this.store.saveAfterContextUpdate();
+                }
                 break;
             }
             case 'reply': {
@@ -564,6 +587,14 @@ export class ReviewWebviewPanel {
             }
             case 'openRevision': {
                 this.onRevisionRequested?.(originalPath, msg.revision);
+                break;
+            }
+            case 'toggleDiffMode': {
+                this.onDiffModeToggled?.(originalPath, !!msg.enabled);
+                break;
+            }
+            case 'pinVersion': {
+                this.onPinVersion?.(originalPath, msg.revision);
                 break;
             }
         }
