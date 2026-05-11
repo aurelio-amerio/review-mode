@@ -200,7 +200,7 @@ body.markdown-content {
     transition: all 0.15s;
 }
 
-.toolbar-seg-btn + .toolbar-seg-btn {
+.toolbar-seg-btn+.toolbar-seg-btn {
     border-left: 1px solid rgba(255, 255, 255, 0.12);
 }
 
@@ -256,7 +256,7 @@ body.markdown-content {
 /* --- History Items --- */
 .history-item {
     display: grid;
-    grid-template-columns: 52px 28px 1fr auto;
+    grid-template-columns: 52px 42px 1fr auto;
     align-items: center;
     gap: 4px;
     padding: 6px 10px 6px 14px;
@@ -295,6 +295,7 @@ body.markdown-content {
     border-radius: 3px;
     padding: 1px 4px;
     white-space: nowrap;
+    justify-self: center;
 }
 
 .history-date {
@@ -338,6 +339,7 @@ body.markdown-content {
     opacity: 0.4;
     transition: all 0.15s;
     flex-shrink: 0;
+    justify-self: center;
 }
 
 .pin-btn:hover {

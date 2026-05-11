@@ -34,6 +34,16 @@ export class ReviewModeController {
             this.pinnedRevision = revision;
             this.sendDiffToWebview(originalPath);
         };
+
+        this.webview.onRevertToPinnedDiff = (originalPath: string) => {
+            // Re-send diff using the actual pinned revision (not a temporary preview)
+            this.sendDiffToWebview(originalPath);
+        };
+
+        this.webview.onPreviewDiffBase = (originalPath: string, revision: number) => {
+            // Temporarily show diff from this revision without changing the actual pin
+            this.sendDiffToWebview(originalPath, revision);
+        };
     }
 
     /** Open a file in review mode.
@@ -203,7 +213,7 @@ export class ReviewModeController {
         }
     }
 
-    private sendDiffToWebview(originalPath: string): void {
+    private sendDiffToWebview(originalPath: string, overrideRevision?: number): void {
         if (!this.diffModeEnabled) {
             this.webview.postMessageToPanel(originalPath, { type: 'clearDiff' });
             const revisions = this.store.getRevisions();
@@ -223,9 +233,10 @@ export class ReviewModeController {
         const latestSnapshotPath = path.join(plansDir, latestRevision.snapshotFile);
         const currentText = fs.readFileSync(latestSnapshotPath, 'utf-8');
 
+        const baseRevIdx = overrideRevision !== undefined ? overrideRevision : this.pinnedRevision;
         let baseText = '';
-        if (this.pinnedRevision >= 0 && this.pinnedRevision < revisions.length) {
-            const baseSnapshotPath = path.join(plansDir, revisions[this.pinnedRevision].snapshotFile);
+        if (baseRevIdx >= 0 && baseRevIdx < revisions.length) {
+            const baseSnapshotPath = path.join(plansDir, revisions[baseRevIdx].snapshotFile);
             baseText = fs.readFileSync(baseSnapshotPath, 'utf-8');
         }
 

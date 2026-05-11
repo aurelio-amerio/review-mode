@@ -32,6 +32,8 @@ export class ReviewWebviewPanel {
     public onRevisionRequested?: (originalPath: string, revision: number) => void;
     public onDiffModeToggled?: (originalPath: string, enabled: boolean) => void;
     public onPinVersion?: (originalPath: string, revision: number) => void;
+    public onRevertToPinnedDiff?: (originalPath: string) => void;
+    public onPreviewDiffBase?: (originalPath: string, revision: number) => void;
 
     constructor(
         private context: vscode.ExtensionContext,
@@ -284,7 +286,7 @@ export class ReviewWebviewPanel {
             ${bodyContent}
         </div>
         <div class="panel-resize-handle" id="panel-resize-handle"></div>
-        <div class="comments-pane">
+        <div class="comments-pane"${this.getSavedPanelWidthStyle()}>
             <div class="pane-tabs">
                 <button class="pane-tab active" data-tab="comments">Comments</button>
                 <button class="pane-tab" data-tab="history">History</button>
@@ -643,6 +645,20 @@ export class ReviewWebviewPanel {
                 this.onPinVersion?.(originalPath, msg.revision);
                 break;
             }
+            case 'revertToPinnedDiff': {
+                this.onRevertToPinnedDiff?.(originalPath);
+                break;
+            }
+            case 'previewDiffBase': {
+                this.onPreviewDiffBase?.(originalPath, msg.revision);
+                break;
+            }
+            case 'savePanelWidth': {
+                if (typeof msg.width === 'number') {
+                    this.context.globalState.update('reviewMode.panelWidth', msg.width);
+                }
+                break;
+            }
         }
     }
 
@@ -683,6 +699,11 @@ export class ReviewWebviewPanel {
             this.activeRevisionsPath = ctx.revisionsPath;
             this.store.load(ctx.revisionsPath);
         }
+    }
+
+    private getSavedPanelWidthStyle(): string {
+        const savedWidth = this.context.globalState.get<number>('reviewMode.panelWidth');
+        return savedWidth ? ` style="width:${savedWidth}px"` : '';
     }
 
     private escapeHtml(text: string): string {

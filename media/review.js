@@ -26,7 +26,15 @@
         const target = document.getElementById(tabId + '-pane-content');
         if (target) { target.classList.add('active'); }
 
-        vscode.setState({ activeTab: tabId });
+        const state = vscode.getState() || {};
+        state.activeTab = tabId;
+        vscode.setState(state);
+
+        // When switching away from history tab with diff mode on,
+        // revert to showing the pinned version diff (not a temporary preview)
+        if (tabId === 'comments' && diffModeEnabled) {
+            vscode.postMessage({ type: 'revertToPinnedDiff' });
+        }
     }
 
     const previousState = vscode.getState();
@@ -645,8 +653,8 @@
             if (isNaN(revision)) { return; }
 
             if (diffModeEnabled && revision !== latestRevision) {
-                // In diff mode: use clicked revision as diff base (without locking the pin)
-                vscode.postMessage({ type: 'pinVersion', revision });
+                // In diff mode: temporarily preview diff from this revision (without changing the pin)
+                vscode.postMessage({ type: 'previewDiffBase', revision });
             } else {
                 vscode.postMessage({ type: 'openRevision', revision });
             }
@@ -682,6 +690,12 @@
         const commentsPane = document.querySelector('.comments-pane');
         if (!handle || !commentsPane) { return; }
 
+        // Restore saved width from persistent state
+        const savedState = vscode.getState();
+        if (savedState && savedState.panelWidth) {
+            commentsPane.style.width = savedState.panelWidth + 'px';
+        }
+
         let startX = 0;
         let startWidth = 0;
 
@@ -705,6 +719,14 @@
             handle.classList.remove('dragging');
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
+
+            // Persist the new width
+            const finalWidth = Math.round(commentsPane.getBoundingClientRect().width);
+            const state = vscode.getState() || {};
+            state.panelWidth = finalWidth;
+            vscode.setState(state);
+            // Also persist via extension globalState for cross-session survival
+            vscode.postMessage({ type: 'savePanelWidth', width: finalWidth });
         });
     })();
 })();
