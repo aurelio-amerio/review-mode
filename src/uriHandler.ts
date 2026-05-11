@@ -45,13 +45,8 @@ export class ReviewModeUriHandler implements vscode.UriHandler {
             return;
         }
 
-        // Validate it's a markdown file
-        if (path.extname(filePath).toLowerCase() !== '.md') {
-            vscode.window.showErrorMessage(
-                'Review Mode: only Markdown (.md) files are supported.',
-            );
-            return;
-        }
+        // Removed markdown check
+
 
         // Open the file, then trigger review mode
         const fileUri = vscode.Uri.file(filePath);

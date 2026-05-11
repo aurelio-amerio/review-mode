@@ -22,9 +22,9 @@ export function registerChatParticipant(context: vscode.ExtensionContext): void 
 
         // Default: explain what this participant can do
         stream.markdown(
-            'I can open Markdown files in **Review Mode** with threaded annotations.\n\n' +
+            'I can open files in **Review Mode** with threaded annotations.\n\n' +
             'Use `/review` to open the active editor file, or provide a file path:\n\n' +
-            '```\n@review-mode /review path/to/file.md\n```',
+            '```\n@review-mode /review path/to/file\n```',
         );
         return { metadata: { command: '' } };
     };
@@ -72,20 +72,13 @@ async function handleReviewCommand(
     if (!editor) {
         stream.markdown(
             '⚠️ No file is currently open in the editor.\n\n' +
-            'Open a `.md` file first, or provide a path:\n' +
-            '```\n@review-mode /review path/to/file.md\n```',
+            'Open a file first, or provide a path:\n' +
+            '```\n@review-mode /review path/to/file\n```',
         );
         return { metadata: { command: 'review' } };
     }
 
     const fileUri = editor.document.uri;
-    if (!fileUri.fsPath.endsWith('.md')) {
-        stream.markdown(
-            `⚠️ The active file (**${vscode.workspace.asRelativePath(fileUri)}**) is not a Markdown file.\n\n` +
-            'Review Mode only supports `.md` files.',
-        );
-        return { metadata: { command: 'review' } };
-    }
 
     stream.progress('Opening in Review Mode…');
     try {

@@ -277,12 +277,8 @@ async function executeOpenReview(args: unknown[]): Promise<void> {
         return;
     }
 
-    if (path.extname(resolved).toLowerCase() !== '.md') {
-        vscode.window.showErrorMessage(
-            `Review Mode: only Markdown (.md) files are supported (got "${path.extname(resolved)}").`,
-        );
-        return;
-    }
+        // Removed markdown check
+
 
     // Optional workspace root from MCP directive (used for files outside the workspace)
     const workspaceRoot = typeof rawWorkspace === 'string' && rawWorkspace
