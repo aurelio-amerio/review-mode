@@ -10,6 +10,10 @@
     let selectionStart = null;
     /** @type {number|null} */
     let selectionEnd = null;
+    /** @type {boolean} */
+    let diffModeEnabled = false;
+    /** @type {Array<{type: string, lines: string[]}>|null} */
+    let currentDiffHunks = null;
 
     // --- Tab switching & State ---
     function activateTab(tabId) {
@@ -32,6 +36,17 @@
         const tab = e.target.closest('.pane-tab');
         if (!tab) { return; }
         activateTab(tab.dataset.tab);
+    });
+
+    // --- Diff Mode toggle ---
+    document.addEventListener('click', (e) => {
+        const toggle = e.target.closest('#diff-mode-toggle');
+        if (!toggle) { return; }
+
+        diffModeEnabled = !diffModeEnabled;
+        toggle.dataset.enabled = String(diffModeEnabled);
+        toggle.textContent = diffModeEnabled ? 'ON' : 'OFF';
+        vscode.postMessage({ type: 'toggleDiffMode', enabled: diffModeEnabled });
     });
 
     // --- Helper: get line range from native text selection ---
@@ -403,6 +418,58 @@
         }
     });
 
+    function renderDiff(hunks) {
+        currentDiffHunks = hunks;
+        const codePane = document.querySelector('.code-pane');
+        if (!codePane) { return; }
+
+        const addNoteIcon = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3l3 3 3-3h3a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm0 9h-3.5L8 12.5 5.5 10H2V2h12v8z"/><path d="M7.25 4v2.25H5v1.5h2.25V10h1.5V7.75H11v-1.5H8.75V4z"/></svg>';
+        let html = '';
+        let currentLineNum = 0;
+
+        for (const hunk of hunks) {
+            for (const line of hunk.lines) {
+                const escaped = escapeHtml(line) || '&nbsp;';
+                if (hunk.type === 'removed') {
+                    const anchorLine = currentLineNum > 0 ? currentLineNum : 1;
+                    html += `<div class="line-container diff-removed" data-diff-type="removed">
+    <div class="line-gutter">
+        <span class="line-number"></span>
+        <span class="diff-gutter-marker removed">−</span>
+        <button class="add-note-btn" data-line="${anchorLine}" title="Add comment">${addNoteIcon}</button>
+    </div>
+    <div class="line-content">${escaped}</div>
+</div>\n`;
+                } else if (hunk.type === 'added') {
+                    currentLineNum++;
+                    html += `<div class="line-container diff-added" data-line="${currentLineNum}" data-diff-type="added">
+    <div class="line-gutter">
+        <span class="line-number">${currentLineNum}</span>
+        <span class="diff-gutter-marker added">+</span>
+        <button class="add-note-btn" data-line="${currentLineNum}" title="Add comment">${addNoteIcon}</button>
+    </div>
+    <div class="line-content">${escaped}</div>
+</div>\n`;
+                } else {
+                    currentLineNum++;
+                    html += `<div class="line-container" data-line="${currentLineNum}">
+    <div class="line-gutter">
+        <span class="line-number">${currentLineNum}</span>
+        <button class="add-note-btn" data-line="${currentLineNum}" title="Add comment">${addNoteIcon}</button>
+    </div>
+    <div class="line-content">${escaped}</div>
+</div>\n`;
+                }
+            }
+        }
+
+        codePane.innerHTML = html;
+    }
+
+    function clearDiff() {
+        currentDiffHunks = null;
+    }
+
     // --- Handle messages from extension ---
     window.addEventListener('message', (event) => {
         const msg = event.data;
@@ -425,6 +492,18 @@
             const codePane = document.querySelector('.code-pane');
             if (codePane) {
                 codePane.innerHTML = msg.html;
+            }
+        }
+        if (msg.type === 'showDiff') {
+            renderDiff(msg.hunks);
+        }
+        if (msg.type === 'clearDiff') {
+            clearDiff();
+            diffModeEnabled = false;
+            const toggle = document.getElementById('diff-mode-toggle');
+            if (toggle) {
+                toggle.dataset.enabled = 'false';
+                toggle.textContent = 'OFF';
             }
         }
     });
