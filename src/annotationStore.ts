@@ -282,6 +282,17 @@ export class AnnotationStore {
         this._onDidChange.fire();
     }
 
+    /** Update the text of a single message. */
+    updateMessage(annotationId: string, messageId: string, newText: string): void {
+        const annotation = this.annotations.find(a => a.id === annotationId);
+        if (!annotation) { return; }
+        const message = annotation.thread.find(m => m.id === messageId);
+        if (!message) { return; }
+        message.text = newText;
+        this.saveCurrentRevision();
+        this._onDidChange.fire();
+    }
+
     /** Delete an entire annotation thread. */
     deleteAnnotation(annotationId: string): void {
         this.annotations = this.annotations.filter(a => a.id !== annotationId);
