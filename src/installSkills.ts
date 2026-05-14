@@ -295,19 +295,20 @@ async function installCursor(context: vscode.ExtensionContext): Promise<void> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function installVscode(context: vscode.ExtensionContext): Promise<void> {
-    // 1. Check uv
-    if (!await checkUvInstalled()) { return; }
-
-    // 2. Install / upgrade review-mode-mcp
-    const mcpOk = await installOrUpgradeMcpServer();
-    if (!mcpOk) { return; }
-
-    // The VS Code MCP provider (mcpProvider.ts) is always registered at activation
-    // and references review-mode-mcp directly — nothing more to do here.
     await saveInstalledVersion(context);
-    vscode.window.showInformationMessage(
-        'Review Mode: VS Code Copilot skills installed. The MCP server is available in Copilot Agent Mode.',
+
+    const choice = await vscode.window.showInformationMessage(
+        'Review Mode: Install the Copilot plugin to enable agent skills:',
+        {
+            modal: true,
+            detail: '1. Open the Command Palette (Ctrl+Shift+P)\n2. Run: Chat: Install Plugin From Source\n3. Enter: https://github.com/aurelio-amerio/review-mode-plugin',
+        },
+        'Copy URL',
     );
+    if (choice === 'Copy URL') {
+        await vscode.env.clipboard.writeText('https://github.com/aurelio-amerio/review-mode-plugin');
+        vscode.window.showInformationMessage('Review Mode: Plugin URL copied to clipboard.');
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
