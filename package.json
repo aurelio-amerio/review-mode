@@ -126,6 +126,14 @@
       {
         "command": "reviewMode.installAntigravitySkills",
         "title": "Review Mode: Install Antigravity Skills"
+      },
+      {
+        "command": "reviewMode.installClaudeSkills",
+        "title": "Review Mode: Install Claude Code Skills"
+      },
+      {
+        "command": "reviewMode.installCodexSkills",
+        "title": "Review Mode: Install Codex Skills"
       }
     ],
     "viewsContainers": {

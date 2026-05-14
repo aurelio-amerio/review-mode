@@ -19,7 +19,7 @@ import * as os from 'os';
 
 const INSTALLED_VERSION_KEY = 'lastInstalledSkillsVersion';
 
-type EditorTarget = 'cline' | 'cursor' | 'vscode' | 'antigravity';
+type EditorTarget = 'cline' | 'cursor' | 'vscode' | 'antigravity' | 'claude' | 'codex';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Public registration
@@ -42,6 +42,12 @@ export function registerInstallCommands(context: vscode.ExtensionContext): void 
         vscode.commands.registerCommand('reviewMode.installAntigravitySkills', () =>
             installForEditor(context, 'antigravity'),
         ),
+        vscode.commands.registerCommand('reviewMode.installClaudeSkills', () =>
+            installForEditor(context, 'claude'),
+        ),
+        vscode.commands.registerCommand('reviewMode.installCodexSkills', () =>
+            installForEditor(context, 'codex'),
+        ),
     );
 }
 
@@ -51,6 +57,15 @@ export function registerInstallCommands(context: vscode.ExtensionContext): void 
 
 async function installSkillsUnified(context: vscode.ExtensionContext): Promise<void> {
     const items: vscode.QuickPickItem[] = [
+        {
+            label: 'Claude Code',
+            description: 'Install the review-mode plugin via the Claude Code CLI',
+            detail: 'Requires claude CLI on PATH',
+            iconPath: {
+                light: vscode.Uri.file(context.asAbsolutePath('media/logos/claude_light.svg')),
+                dark: vscode.Uri.file(context.asAbsolutePath('media/logos/claude_dark.svg'))
+            }
+        },
         {
             label: 'Cline',
             description: 'Install review-mode-mcp via uv and copy workflows & skills into workspace',
@@ -67,6 +82,14 @@ async function installSkillsUnified(context: vscode.ExtensionContext): Promise<v
             iconPath: {
                 light: vscode.Uri.file(context.asAbsolutePath('media/logos/cursor_light.svg')),
                 dark: vscode.Uri.file(context.asAbsolutePath('media/logos/cursor_dark.svg'))
+            }
+        },
+        {
+            label: 'Codex',
+            description: 'Show instructions to install the review-mode plugin for Codex',
+            iconPath: {
+                light: vscode.Uri.file(context.asAbsolutePath('media/logos/codex_light.svg')),
+                dark: vscode.Uri.file(context.asAbsolutePath('media/logos/codex_dark.svg'))
             }
         },
         {
@@ -102,6 +125,8 @@ async function installSkillsUnified(context: vscode.ExtensionContext): Promise<v
         'Cursor': 'cursor',
         'VS Code (Copilot)': 'vscode',
         'Antigravity': 'antigravity',
+        'Claude Code': 'claude',
+        'Codex': 'codex',
     };
 
     const target = editorMap[picked.label];
@@ -130,6 +155,12 @@ async function installForEditor(
             break;
         case 'antigravity':
             await installAntigravity(context);
+            break;
+        case 'claude':
+            await installClaude(context);
+            break;
+        case 'codex':
+            await showCodexInstructions();
             break;
     }
 }
@@ -277,6 +308,95 @@ async function installVscode(context: vscode.ExtensionContext): Promise<void> {
     vscode.window.showInformationMessage(
         'Review Mode: VS Code Copilot skills installed. The MCP server is available in Copilot Agent Mode.',
     );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Claude Code install
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function installClaude(context: vscode.ExtensionContext): Promise<void> {
+    if (!await checkClaudeInstalled()) { return; }
+
+    await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Review Mode',
+            cancellable: false,
+        },
+        async (progress) => {
+            // All three commands are idempotent — safe to run on both fresh install and update.
+            progress.report({ message: 'Adding plugin marketplace…' });
+            const marketplaceOk = await runCommand('claude', [
+                'plugin', 'marketplace', 'add',
+                'https://github.com/aurelio-amerio/review-mode-plugin',
+            ]);
+            if (!marketplaceOk) {
+                vscode.window.showErrorMessage(
+                    'Review Mode: Failed to add plugin marketplace. Make sure the Claude Code CLI is up to date.',
+                );
+                return;
+            }
+
+            progress.report({ message: 'Installing plugin…' });
+            const installOk = await runCommand('claude', ['plugin', 'install', 'review-mode@review-mode-plugin']);
+            if (!installOk) {
+                vscode.window.showErrorMessage('Review Mode: Failed to install the Claude Code plugin.');
+                return;
+            }
+
+            progress.report({ message: 'Checking for updates…' });
+            await runCommand('claude', ['plugin', 'update', 'review-mode@review-mode-plugin']);
+
+            await saveInstalledVersion(context);
+            vscode.window.showInformationMessage('Review Mode: Claude Code plugin installed/updated successfully.');
+        },
+    );
+}
+
+async function checkClaudeInstalled(): Promise<boolean> {
+    return new Promise(resolve => {
+        cp.execFile('claude', ['--version'], { timeout: 5000 }, (err) => {
+            if (!err) { resolve(true); return; }
+            vscode.window.showErrorMessage(
+                'Review Mode: `claude` CLI is not installed or not on PATH.',
+                'Install Claude Code',
+            ).then(choice => {
+                if (choice === 'Install Claude Code') {
+                    vscode.env.openExternal(vscode.Uri.parse('https://claude.ai/download'));
+                }
+            });
+            resolve(false);
+        });
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Codex instructions
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function showCodexInstructions(): Promise<void> {
+    const command = 'codex plugin marketplace add aurelio-amerio/review-mode-plugin';
+    const choice = await vscode.window.showInformationMessage(
+        'Install Review Mode for Codex',
+        {
+            modal: true,
+            detail: 'Run this command in your terminal, then browse the Codex plugin directory to install:\n\n' + command,
+        },
+        'Copy Command',
+    );
+    if (choice === 'Copy Command') {
+        await vscode.env.clipboard.writeText(command);
+        vscode.window.showInformationMessage('Review Mode: Codex command copied to clipboard.');
+    }
+}
+
+/** Run an arbitrary CLI command. Returns true on exit code 0. */
+function runCommand(cmd: string, args: string[]): Promise<boolean> {
+    return new Promise(resolve => {
+        const proc = cp.spawn(cmd, args, { stdio: 'pipe' });
+        proc.on('close', code => resolve(code === 0));
+        proc.on('error', () => resolve(false));
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
