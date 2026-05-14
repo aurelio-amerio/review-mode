@@ -941,8 +941,8 @@
     }
 
     function updateAnnotationHighlights(annotations) {
-        document.querySelectorAll('.line-container.annotated').forEach(el => {
-            el.classList.remove('annotated');
+        document.querySelectorAll('.line-container.annotated, .line-container.annotated-start').forEach(el => {
+            el.classList.remove('annotated', 'annotated-start');
         });
         document.querySelectorAll('.annotation-badge').forEach(el => el.remove());
         document.querySelectorAll('.annotation-indicator').forEach(el => el.remove());
@@ -960,6 +960,7 @@
                 if (gutter) {
                     const badge = document.createElement('span');
                     badge.className = 'annotation-badge';
+                    badge.dataset.annotationId = ann.id;
                     badge.textContent = `${ann.threadCount}`;
                     badge.title = `${ann.threadCount} comment(s)`;
                     const firstLineNum = gutter.querySelector('.line-number');
@@ -983,6 +984,7 @@
                         container.after(indicator);
                     }
                 } else {
+                    if (i === ann.startLine) { container.classList.add('annotated-start'); }
                     container.classList.add('annotated');
                 }
             }
