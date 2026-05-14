@@ -423,6 +423,12 @@ body.markdown-content {
     font-family: var(--vscode-editor-font-family, 'Consolas', monospace);
 }
 
+.old-line-number,
+.new-line-number {
+    min-width: 22px;
+    text-align: right;
+}
+
 /* Hide line numbers in markdown mode — just show the "+" button */
 .markdown-content .line-number {
     display: none;
@@ -431,6 +437,15 @@ body.markdown-content {
 /* Show line numbers in diff mode regardless of file type */
 body.diff-mode .line-number {
     display: block;
+}
+
+/* Diff mode: wider gutter to fit old + new line number columns */
+body.diff-mode .code-pane {
+    padding-left: 104px;
+}
+
+body.diff-mode .line-gutter {
+    left: -100px;
 }
 
 .add-note-btn {
@@ -477,11 +492,13 @@ body.diff-mode .line-number {
     background: var(--accent);
     color: white;
     border-radius: 10px;
-    padding: 0 6px;
+    padding: 0 5px;
     font-size: 0.7em;
-    margin-left: 8px;
     flex-shrink: 0;
-    align-self: center;
+    line-height: 1.6;
+    min-width: 16px;
+    text-align: center;
+    cursor: default;
 }
 
 /* --- Annotation indicator bar (for diff lines where blue bg would conflict) --- */
