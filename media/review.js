@@ -218,11 +218,26 @@
     // --- Track line selection (click + shift-click for range) ---
     document.addEventListener('click', (e) => {
         const container = e.target.closest('.line-container');
-        if (!container || e.target.closest('.add-note-btn') || e.target.closest('.inline-comment-form')) {
+        if (!container || e.target.closest('.add-note-btn') || e.target.closest('.inline-comment-form') || e.target.closest('.annotation-badge')) {
             return;
         }
 
         const isDeletedLine = container.dataset.oldLine !== undefined;
+
+        if (e.ctrlKey || e.metaKey) {
+            // Ctrl/Cmd+click on annotated line → navigate to its comment thread
+            const lineNum = parseInt(container.dataset.line, 10);
+            const ann = currentAnnotations.find(a => lineNum >= a.startLine && lineNum <= a.endLine);
+            if (ann) {
+                const thread = document.querySelector(`.comment-thread[data-annotation-id="${ann.id}"]`);
+                if (thread) {
+                    thread.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    thread.classList.add('thread-highlight');
+                    setTimeout(() => thread.classList.remove('thread-highlight'), 1500);
+                }
+            }
+            return;
+        }
 
         if (isDeletedLine) {
             const oldLine = parseInt(container.dataset.oldLine, 10);
@@ -313,7 +328,7 @@
         highlightSelection(startLine, endLine, oldStartLine ?? null, oldEndLine ?? null);
 
         const rangeLabel = (oldStartLine !== undefined)
-            ? (oldStartLine === oldEndLine ? `deleted line ${oldStartLine}` : `deleted lines ${oldStartLine}–${oldEndLine}`)
+            ? ((oldEndLine ?? oldStartLine) === oldStartLine ? `deleted line ${oldStartLine}` : `deleted lines ${oldStartLine}–${oldEndLine ?? oldStartLine}`)
             : (startLine !== endLine ? `lines ${startLine}–${endLine}` : `line ${startLine}`);
 
         const form = document.createElement('div');
@@ -369,12 +384,24 @@
         form.querySelector('.inline-comment-submit').addEventListener('click', submit);
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { submit(); }
-            if (e.key === 'Escape') { form.remove(); activeForm = null; clearSelection(); }
+            if (e.key === 'Escape') {
+                form.remove(); activeForm = null; clearSelection();
+                selectionStart = null;
+                selectionEnd = null;
+                deletedSelStart = null;
+                deletedSelEnd = null;
+                deletedSelAnchor = null;
+            }
         });
         form.querySelector('.inline-comment-cancel').addEventListener('click', () => {
             form.remove();
             activeForm = null;
             clearSelection();
+            selectionStart = null;
+            selectionEnd = null;
+            deletedSelStart = null;
+            deletedSelEnd = null;
+            deletedSelAnchor = null;
         });
     }
 
