@@ -469,6 +469,7 @@ body.diff-mode .line-number {
     padding: 0 16px 0 0;
     white-space: pre-wrap;
     word-break: break-word;
+    overflow: hidden; /* BFC: contains child margins so they don't bleed out of .line-container */
 }
 
 /* --- Annotation count badge --- */
@@ -604,6 +605,7 @@ body.diff-mode .line-number {
 
 .md-list-item .line-content li {
     margin: 0;
+    list-style-position: inside;
 }
 
 /* Fallback for block-rendered lists (e.g. nested) */
