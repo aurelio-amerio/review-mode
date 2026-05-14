@@ -10,6 +10,12 @@
     let selectionStart = null;
     /** @type {number|null} */
     let selectionEnd = null;
+    /** @type {number|null} */
+    let deletedSelStart = null;
+    /** @type {number|null} */
+    let deletedSelEnd = null;
+    /** @type {number|null} - shared new-file anchor for the deleted selection range */
+    let deletedSelAnchor = null;
     /** @type {boolean} */
     let diffModeEnabled = false;
     /** @type {Array<{type: string, lines: string[]}>|null} */
@@ -151,6 +157,8 @@
         if (!btn) { return; }
 
         const lineNum = parseInt(btn.dataset.line, 10);
+        const oldLineAttr = btn.dataset.oldLine;
+        const isDeletedLine = oldLineAttr !== undefined;
 
         // For markdown blocks, get the full block range from the container
         const container = btn.closest('.line-container');
@@ -158,14 +166,45 @@
             ? parseInt(container.dataset.endLine, 10)
             : lineNum;
 
-        // First, check native text selection (user dragged to select text)
+        // Check native text selection first (user dragged across lines)
         const nativeRange = getSelectionLineRange();
         if (nativeRange && (nativeRange.startLine !== nativeRange.endLine)) {
             showInlineCommentForm(nativeRange.startLine, nativeRange.endLine);
             return;
         }
 
-        // Then, check our click/shift-click selection
+        if (isDeletedLine) {
+            const oldLine = parseInt(oldLineAttr, 10);
+            // If there's an active deleted-line range selection, use it
+            if (deletedSelStart !== null && deletedSelEnd !== null) {
+                const oldStart = Math.min(deletedSelStart, deletedSelEnd);
+                const oldEnd = Math.max(deletedSelStart, deletedSelEnd);
+                const anchor = deletedSelAnchor ?? lineNum;
+                // textPreview = text of the first deleted line in range
+                const firstContainer = document.querySelector(`.line-container[data-old-line="${oldStart}"]`);
+                const preview = firstContainer
+                    ? firstContainer.querySelector('.line-content')?.textContent?.trim() ?? ''
+                    : '';
+                showInlineCommentForm(anchor, anchor, {
+                    oldStartLine: oldStart,
+                    oldEndLine: oldEnd,
+                    textPreview: preview,
+                    targetElement: document.querySelector(`.line-container[data-old-line="${oldEnd}"]`),
+                });
+            } else {
+                // Single deleted line
+                const lineText = container?.querySelector('.line-content')?.textContent?.trim() ?? '';
+                showInlineCommentForm(lineNum, lineNum, {
+                    oldStartLine: oldLine,
+                    oldEndLine: oldLine,
+                    textPreview: lineText,
+                    targetElement: container,
+                });
+            }
+            return;
+        }
+
+        // Regular (non-deleted) line
         if (selectionStart !== null && selectionEnd !== null && selectionStart !== selectionEnd) {
             const startLine = Math.min(selectionStart, selectionEnd);
             const endLine = Math.max(selectionStart, selectionEnd);
@@ -173,55 +212,72 @@
             return;
         }
 
-        // Single line or block
         showInlineCommentForm(lineNum, blockEndLine);
     });
 
     // --- Track line selection (click + shift-click for range) ---
     document.addEventListener('click', (e) => {
         const container = e.target.closest('.line-container');
-        if (!container || e.target.closest('.add-note-btn') || e.target.closest('.inline-comment-form') || e.target.closest('.annotation-badge')) {
+        if (!container || e.target.closest('.add-note-btn') || e.target.closest('.inline-comment-form')) {
             return;
         }
 
-        const lineNum = parseInt(container.dataset.line, 10);
+        const isDeletedLine = container.dataset.oldLine !== undefined;
 
-        if (e.ctrlKey || e.metaKey) {
-            // Ctrl/Cmd+click on annotated line → navigate to its comment thread
-            const ann = currentAnnotations.find(a => lineNum >= a.startLine && lineNum <= a.endLine);
-            if (ann) {
-                const thread = document.querySelector(`.comment-thread[data-annotation-id="${ann.id}"]`);
-                if (thread) {
-                    thread.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    thread.classList.add('thread-highlight');
-                    setTimeout(() => thread.classList.remove('thread-highlight'), 1500);
-                }
+        if (isDeletedLine) {
+            const oldLine = parseInt(container.dataset.oldLine, 10);
+            const anchorLine = parseInt(container.dataset.line, 10);
+            if (e.shiftKey && deletedSelStart !== null) {
+                deletedSelEnd = oldLine;
+                highlightSelection(null, null, deletedSelStart, deletedSelEnd);
+            } else {
+                clearSelection();
+                // Clear any new-line selection when starting a deleted-line selection
+                selectionStart = null;
+                selectionEnd = null;
+                deletedSelStart = oldLine;
+                deletedSelEnd = oldLine;
+                deletedSelAnchor = anchorLine;
+                container.classList.add('selected');
             }
             return;
         }
 
+        const lineNum = parseInt(container.dataset.line, 10);
         if (e.shiftKey && selectionStart !== null) {
             selectionEnd = lineNum;
-            highlightSelection(selectionStart, selectionEnd);
+            highlightSelection(selectionStart, selectionEnd, null, null);
         } else {
             clearSelection();
+            // Clear any deleted-line selection when starting a new-line selection
+            deletedSelStart = null;
+            deletedSelEnd = null;
+            deletedSelAnchor = null;
             selectionStart = lineNum;
             selectionEnd = lineNum;
             container.classList.add('selected');
         }
     });
 
-    /**
-     * @param {number} start
-     * @param {number} end
-     */
-    function highlightSelection(start, end) {
+    function highlightSelection(start, end, oldStart, oldEnd) {
         clearSelection();
-        const minLine = Math.min(start, end);
-        const maxLine = Math.max(start, end);
-        for (let i = minLine; i <= maxLine; i++) {
-            const el = document.querySelector(`.line-container[data-line="${i}"]`);
-            if (el) { el.classList.add('selected'); }
+        // Highlight new-file lines
+        if (start !== null && end !== null) {
+            const minLine = Math.min(start, end);
+            const maxLine = Math.max(start, end);
+            for (let i = minLine; i <= maxLine; i++) {
+                const el = document.querySelector(`.line-container[data-line="${i}"]:not([data-old-line])`);
+                if (el) { el.classList.add('selected'); }
+            }
+        }
+        // Highlight deleted (old-file) lines
+        if (oldStart !== null && oldEnd !== null) {
+            const minOld = Math.min(oldStart, oldEnd);
+            const maxOld = Math.max(oldStart, oldEnd);
+            for (let i = minOld; i <= maxOld; i++) {
+                const el = document.querySelector(`.line-container[data-old-line="${i}"]`);
+                if (el) { el.classList.add('selected'); }
+            }
         }
     }
 
@@ -233,27 +289,37 @@
 
     // --- Inline Comment Form (in code pane) ---
     /**
-     * @param {number} startLine
-     * @param {number} endLine
+     * @param {number} startLine  new-file anchor line
+     * @param {number} endLine    new-file anchor line
+     * @param {{oldStartLine?: number, oldEndLine?: number, textPreview?: string, targetElement?: Element}} [opts]
      */
-    function showInlineCommentForm(startLine, endLine) {
+    function showInlineCommentForm(startLine, endLine, opts) {
         if (activeForm) { activeForm.remove(); }
 
-        let targetContainer = document.querySelector(`.line-container[data-line="${endLine}"]`);
-        // Fall back to the startLine container — needed when a multi-line block
-        // (e.g. a fenced code block) is rendered as a single line-container
+        const oldStartLine = opts?.oldStartLine;
+        const oldEndLine = opts?.oldEndLine;
+        const suppliedPreview = opts?.textPreview;
+
+        // For deleted lines, insert form after the last selected deleted container;
+        // otherwise after the endLine container.
+        let targetContainer = opts?.targetElement
+            || document.querySelector(`.line-container[data-line="${endLine}"]:not([data-old-line])`)
+            || document.querySelector(`.line-container[data-line="${endLine}"]`);
         if (!targetContainer && endLine !== startLine) {
             targetContainer = document.querySelector(`.line-container[data-line="${startLine}"]`);
         }
         if (!targetContainer) { return; }
 
-        // Highlight the range being commented
-        highlightSelection(startLine, endLine);
+        highlightSelection(startLine, endLine, oldStartLine ?? null, oldEndLine ?? null);
+
+        const rangeLabel = (oldStartLine !== undefined)
+            ? (oldStartLine === oldEndLine ? `deleted line ${oldStartLine}` : `deleted lines ${oldStartLine}–${oldEndLine}`)
+            : (startLine !== endLine ? `lines ${startLine}–${endLine}` : `line ${startLine}`);
 
         const form = document.createElement('div');
         form.className = 'inline-comment-form';
         form.innerHTML = `
-            <input class="inline-comment-input" placeholder="Add a comment for line${startLine !== endLine ? 's ' + startLine + '–' + endLine : ' ' + startLine}..." autofocus />
+            <input class="inline-comment-input" placeholder="Add a comment for ${rangeLabel}..." autofocus />
             <button class="inline-comment-submit">Add</button>
             <button class="inline-comment-cancel">Cancel</button>
         `;
@@ -274,6 +340,12 @@
                     text: text,
                 };
 
+                if (oldStartLine !== undefined) {
+                    message.oldStartLine = oldStartLine;
+                    message.oldEndLine = oldEndLine ?? oldStartLine;
+                    if (suppliedPreview !== undefined) { message.textPreview = suppliedPreview; }
+                }
+
                 if (diffModeEnabled && currentDiffHunks) {
                     const context = extractDiffContextFromHunks(currentDiffHunks, startLine, endLine);
                     if (context) {
@@ -289,6 +361,9 @@
             clearSelection();
             selectionStart = null;
             selectionEnd = null;
+            deletedSelStart = null;
+            deletedSelEnd = null;
+            deletedSelAnchor = null;
         };
 
         form.querySelector('.inline-comment-submit').addEventListener('click', submit);
