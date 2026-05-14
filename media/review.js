@@ -334,15 +334,32 @@
         const form = document.createElement('div');
         form.className = 'inline-comment-form';
         form.innerHTML = `
-            <input class="inline-comment-input" placeholder="Add a comment for ${rangeLabel}..." autofocus />
-            <button class="inline-comment-submit">Add</button>
-            <button class="inline-comment-cancel">Cancel</button>
+            <textarea class="inline-comment-input" placeholder="Add a comment for ${rangeLabel}..." rows="1"></textarea>
+            <div class="inline-comment-form-actions">
+                <button class="inline-comment-cancel">Cancel</button>
+                <button class="inline-comment-submit">Add Comment</button>
+            </div>
         `;
 
-        targetContainer.after(form);
+        const codePaneEl = document.querySelector('.code-pane');
+        const paneRect = codePaneEl.getBoundingClientRect();
+        const targetRect = targetContainer.getBoundingClientRect();
+        const top = targetRect.bottom - paneRect.top + codePaneEl.scrollTop;
+        form.style.top = top + 'px';
+        form.style.left = '68px';
+        codePaneEl.appendChild(form);
         activeForm = form;
 
-        const input = /** @type {HTMLInputElement} */ (form.querySelector('.inline-comment-input'));
+        const input = /** @type {HTMLTextAreaElement} */ (form.querySelector('.inline-comment-input'));
+
+        const autoResize = () => {
+            input.style.height = 'auto';
+            const capped = Math.min(input.scrollHeight, 160);
+            input.style.height = capped + 'px';
+            input.style.overflowY = input.scrollHeight > 160 ? 'auto' : 'hidden';
+        };
+        input.addEventListener('input', autoResize);
+
         input.focus();
 
         const submit = () => {
@@ -383,7 +400,7 @@
 
         form.querySelector('.inline-comment-submit').addEventListener('click', submit);
         input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { submit(); }
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
             if (e.key === 'Escape') {
                 form.remove(); activeForm = null; clearSelection();
                 selectionStart = null;

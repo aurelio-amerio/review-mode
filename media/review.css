@@ -41,10 +41,11 @@ body.markdown-content {
 
 .code-pane {
     flex: 1;
-    min-width: 0;
+    min-width: 8px;
     overflow-x: auto;
     overflow-y: auto;
     padding-left: 68px;
+    position: relative;
 }
 
 .comments-pane {
@@ -771,34 +772,55 @@ body.diff-mode .line-gutter {
 
 /* --- Inline comment input (in code pane) --- */
 .inline-comment-form {
+    position: absolute;
+    z-index: 50;
     display: flex;
-    gap: 8px;
-    padding: 8px 12px 8px 70px;
-    background: var(--vscode-input-background, #1e1e1e);
-    border-left: 3px solid var(--accent);
+    flex-direction: column;
+    box-sizing: border-box;
+    right: 8px;
+    max-width: 500px;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+    padding: 6px;
+    gap: 6px;
+    background: var(--vscode-editorWidget-background, var(--vscode-editor-background, #1e1e1e));
 }
 
 .inline-comment-input {
-    flex: 1;
     background: var(--vscode-input-background);
     color: var(--vscode-input-foreground);
     border: 1px solid var(--vscode-input-border, #444);
-    padding: 6px 10px;
+    padding: 6px 8px;
     border-radius: 4px;
     font-family: inherit;
     font-size: inherit;
     outline: none;
+    resize: none;
+    overflow-y: hidden;
+    min-height: 34px;
+    max-height: 160px;
+    line-height: 1.4;
+    box-sizing: border-box;
+    width: 100%;
 }
 
 .inline-comment-input:focus {
     border-color: var(--accent);
+    outline: none;
+}
+
+.inline-comment-form-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
 }
 
 .inline-comment-submit {
     background: var(--accent);
     color: white;
     border: none;
-    padding: 6px 14px;
+    padding: 4px 14px;
     border-radius: 4px;
     cursor: pointer;
     font-size: inherit;
@@ -808,7 +830,7 @@ body.diff-mode .line-gutter {
     background: transparent;
     color: var(--vscode-descriptionForeground);
     border: 1px solid var(--vscode-input-border, #444);
-    padding: 6px 14px;
+    padding: 4px 14px;
     border-radius: 4px;
     cursor: pointer;
     font-size: inherit;
@@ -1081,6 +1103,7 @@ body.diff-mode .line-gutter {
 
 .comment-reply-input {
     flex: 1;
+    min-width: 0;
     background: var(--vscode-input-background);
     color: var(--vscode-input-foreground);
     border: 1px solid var(--vscode-input-border, #444);
