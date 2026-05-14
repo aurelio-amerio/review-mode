@@ -476,7 +476,7 @@
                         <option value="high"${priority === 'high' ? ' selected' : ''}>High</option>
                         <option value="urgent"${priority === 'urgent' ? ' selected' : ''}>Urgent</option>
                     </select>
-                    <button class="comment-thread-delete" data-delete-thread="${ann.id}" title="Delete thread">✕</button>
+                    <button class="comment-thread-delete" data-delete-thread="${ann.id}" title="Delete thread"><span class="codicon codicon-trash"></span></button>
                 </div>
                 <div class="comment-status-bar" data-annotation-id="${ann.id}">
                     ${Object.entries(statusIcons).map(([key, icon]) => `
@@ -491,8 +491,9 @@
             for (const msg of ann.thread) {
                 const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 messagesHtml += `
-                    <div class="comment-message">
-                        <button class="comment-message-delete" data-delete-msg="${msg.id}" data-annotation-id="${ann.id}" title="Delete">✕</button>
+                    <div class="comment-message" data-msg-id="${msg.id}" data-annotation-id="${ann.id}">
+                        <button class="comment-message-edit" data-edit-msg="${msg.id}" data-annotation-id="${ann.id}" title="Edit"><span class="codicon codicon-edit"></span></button>
+                        <button class="comment-message-delete" data-delete-msg="${msg.id}" data-annotation-id="${ann.id}" title="Delete"><span class="codicon codicon-trash"></span></button>
                         <div class="comment-message-text">${escapeHtml(msg.text)}</div>
                         <div class="comment-message-time">${time}</div>
                     </div>
