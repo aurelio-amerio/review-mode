@@ -622,6 +622,10 @@ export class ReviewWebviewPanel {
                 this.store.deleteMessage(msg.annotationId, msg.messageId);
                 break;
             }
+            case 'editMessage': {
+                this.store.updateMessage(msg.annotationId, msg.messageId, msg.text);
+                break;
+            }
             case 'setPriority': {
                 this.store.setPriority(msg.annotationId, msg.priority);
                 break;
