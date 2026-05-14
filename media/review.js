@@ -18,6 +18,8 @@
     let pinnedRef = null;
     /** @type {{type: 'local', revision: number} | {type: 'git', hash: string} | null} */
     let activeRef = null;
+    /** @type {Array<{id: string, startLine: number, endLine: number, threadCount: number}>} */
+    let currentAnnotations = [];
     /** @type {Array|null} */
     let lastRevisions = null;
     /** @type {number} */
@@ -72,35 +74,14 @@
     });
 
     // --- Diff Mode toggle ---
+    // The extension is the single source of truth for diff state.
+    // On click we only send the request; the extension echoes back
+    // a syncDiffState message that updates the webview UI.
     document.addEventListener('click', (e) => {
         const toggle = e.target.closest('#diff-mode-toggle');
         if (!toggle) { return; }
 
-        diffModeEnabled = !diffModeEnabled;
-        if (!diffModeEnabled) {
-            activeRef = null;
-            // Force back to local mode (UI-only — persisted state preserved by extension)
-            historyMode = 'local';
-            const localBtn = document.getElementById('history-mode-local');
-            const gitBtn = document.getElementById('history-mode-git');
-            if (localBtn) { localBtn.classList.add('active'); }
-            if (gitBtn) {
-                gitBtn.classList.remove('active');
-                gitBtn.disabled = true;
-                gitBtn.classList.add('disabled');
-            }
-            vscode.postMessage({ type: 'switchHistoryMode', mode: 'local' });
-        } else {
-            // Re-enable Git button if available (actual mode restore handled by restoreDiffState message)
-            const gitBtn = document.getElementById('history-mode-git');
-            if (gitBtn && isGitAvailable) {
-                gitBtn.disabled = false;
-                gitBtn.classList.remove('disabled');
-            }
-        }
-        toggle.setAttribute('aria-checked', String(diffModeEnabled));
-        vscode.postMessage({ type: 'toggleDiffMode', enabled: diffModeEnabled });
-        // Don't re-render here — the extension will send restoreDiffState (when ON) or updateHistory (when OFF)
+        vscode.postMessage({ type: 'toggleDiffMode', enabled: !diffModeEnabled });
     });
 
     // --- History mode (Local / Git) toggle ---
@@ -199,11 +180,25 @@
     // --- Track line selection (click + shift-click for range) ---
     document.addEventListener('click', (e) => {
         const container = e.target.closest('.line-container');
-        if (!container || e.target.closest('.add-note-btn') || e.target.closest('.inline-comment-form')) {
+        if (!container || e.target.closest('.add-note-btn') || e.target.closest('.inline-comment-form') || e.target.closest('.annotation-badge')) {
             return;
         }
 
         const lineNum = parseInt(container.dataset.line, 10);
+
+        if (e.ctrlKey || e.metaKey) {
+            // Ctrl/Cmd+click on annotated line → navigate to its comment thread
+            const ann = currentAnnotations.find(a => lineNum >= a.startLine && lineNum <= a.endLine);
+            if (ann) {
+                const thread = document.querySelector(`.comment-thread[data-annotation-id="${ann.id}"]`);
+                if (thread) {
+                    thread.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    thread.classList.add('thread-highlight');
+                    setTimeout(() => thread.classList.remove('thread-highlight'), 1500);
+                }
+            }
+            return;
+        }
 
         if (e.shiftKey && selectionStart !== null) {
             selectionEnd = lineNum;
@@ -403,7 +398,6 @@
     }
 
     function extractDiffContextFromHunks(hunks, lineStart, lineEnd) {
-        const contextSize = 3;
         let currentLine = 0;
         const rows = [];
 
@@ -430,21 +424,20 @@
 
         if (firstIdx === -1) { return null; }
 
-        while (firstIdx > 0 && rows[firstIdx - 1].type === 'removed') { firstIdx--; }
-        while (lastIdx < rows.length - 1 && rows[lastIdx + 1].type === 'removed') { lastIdx++; }
-
+        // Only generate context when the annotated line itself is part of a change
         let hasChange = false;
         for (let i = firstIdx; i <= lastIdx; i++) {
             if (rows[i].type !== 'unchanged') { hasChange = true; break; }
         }
         if (!hasChange) { return null; }
 
-        const start = Math.max(0, firstIdx - contextSize);
-        const end = Math.min(rows.length - 1, lastIdx + contextSize);
+        // Expand to the full enclosing hunk boundary
+        while (firstIdx > 0 && rows[firstIdx - 1].type !== 'unchanged') { firstIdx--; }
+        while (lastIdx < rows.length - 1 && rows[lastIdx + 1].type !== 'unchanged') { lastIdx++; }
 
         const prevLines = [];
         const currLines = [];
-        for (let i = start; i <= end; i++) {
+        for (let i = firstIdx; i <= lastIdx; i++) {
             const r = rows[i];
             if (r.type === 'removed') {
                 prevLines.push('-' + r.text);
@@ -509,6 +502,19 @@
             return;
         }
 
+        // Badge click → scroll to comment thread in comments pane
+        const badge = e.target.closest('.annotation-badge');
+        if (badge && badge.dataset.annotationId) {
+            const thread = document.querySelector(`.comment-thread[data-annotation-id="${badge.dataset.annotationId}"]`);
+            if (thread) {
+                thread.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                thread.classList.add('thread-highlight');
+                setTimeout(() => thread.classList.remove('thread-highlight'), 1500);
+            }
+            e.stopPropagation();
+            return;
+        }
+
         // Delete thread
         const deleteThread = e.target.closest('.comment-thread-delete');
         if (deleteThread) {
@@ -570,6 +576,7 @@
 
         document.body.classList.add('diff-mode');
 
+        const totalCurrentLines = hunks.reduce((sum, h) => h.type !== 'removed' ? sum + h.lines.length : sum, 0);
         const addNoteIcon = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3l3 3 3-3h3a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm0 9h-3.5L8 12.5 5.5 10H2V2h12v8z"/><path d="M7.25 4v2.25H5v1.5h2.25V10h1.5V7.75H11v-1.5H8.75V4z"/></svg>';
         let html = '';
         let currentLineNum = 0;
@@ -579,7 +586,7 @@
                 const line = hunk.lines[i];
                 const lineHtml = (hunk.highlightedLines && hunk.highlightedLines[i]) || escapeHtml(line) || '&nbsp;';
                 if (hunk.type === 'removed') {
-                    const anchorLine = currentLineNum > 0 ? currentLineNum : 1;
+                    const anchorLine = Math.min(currentLineNum + 1, totalCurrentLines || 1);
                     html += `<div class="line-container diff-removed" data-diff-type="removed">
     <div class="line-gutter">
         <button class="add-note-btn" data-line="${anchorLine}" title="Add comment">${addNoteIcon}</button>
@@ -623,6 +630,7 @@
     window.addEventListener('message', (event) => {
         const msg = event.data;
         if (msg.type === 'updateAnnotations') {
+            currentAnnotations = msg.annotations || [];
             updateAnnotationHighlights(msg.annotations);
             renderCommentsPane(msg.annotations);
         }
@@ -650,9 +658,30 @@
         }
         if (msg.type === 'clearDiff') {
             clearDiff();
-            diffModeEnabled = false;
             activeRef = null;
-            document.getElementById('diff-mode-toggle')?.setAttribute('aria-checked', 'false');
+        }
+        if (msg.type === 'syncDiffState') {
+            diffModeEnabled = !!msg.enabled;
+            const toggle = document.getElementById('diff-mode-toggle');
+            if (toggle) { toggle.setAttribute('aria-checked', String(diffModeEnabled)); }
+            if (!diffModeEnabled) {
+                activeRef = null;
+                historyMode = 'local';
+                const localBtn = document.getElementById('history-mode-local');
+                const gitBtn = document.getElementById('history-mode-git');
+                if (localBtn) { localBtn.classList.add('active'); }
+                if (gitBtn) {
+                    gitBtn.classList.remove('active');
+                    gitBtn.disabled = true;
+                    gitBtn.classList.add('disabled');
+                }
+            } else {
+                const gitBtn = document.getElementById('history-mode-git');
+                if (gitBtn && isGitAvailable) {
+                    gitBtn.disabled = false;
+                    gitBtn.classList.remove('disabled');
+                }
+            }
         }
         if (msg.type === 'setGitAvailable') {
             isGitAvailable = !!msg.available;
@@ -908,7 +937,7 @@
     function updateAnnotationHighlights(annotations) {
         // Clear previous highlights
         document.querySelectorAll('.line-container.annotated').forEach(el => {
-            el.classList.remove('annotated');
+            el.classList.remove('annotated', 'annotated-start');
         });
         document.querySelectorAll('.annotation-badge').forEach(el => el.remove());
         document.querySelectorAll('.annotation-indicator').forEach(el => el.remove());
@@ -930,12 +959,14 @@
                     } else {
                         // For unchanged lines: use the normal annotated highlight
                         container.classList.add('annotated');
+                        if (i === ann.startLine) { container.classList.add('annotated-start'); }
                     }
 
                     // Badge on the start line (works for both diff and non-diff lines)
                     if (i === ann.startLine) {
                         const badge = document.createElement('span');
                         badge.className = 'annotation-badge';
+                        badge.dataset.annotationId = ann.id;
                         badge.textContent = `${ann.threadCount}`;
                         badge.title = `${ann.threadCount} comment(s)`;
                         container.appendChild(badge);

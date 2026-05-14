@@ -23,6 +23,8 @@ body {
     font-size: var(--vscode-editor-font-size, 14px);
     line-height: 1.5;
     padding: 0;
+    height: 100vh;
+    overflow: hidden;
 }
 
 /* Markdown mode uses proportional font for readability */
@@ -34,13 +36,14 @@ body.markdown-content {
 /* --- Two-pane layout --- */
 .review-layout {
     display: flex;
-    min-height: 100vh;
+    height: 100vh;
 }
 
 .code-pane {
     flex: 1;
     min-width: 0;
     overflow-x: auto;
+    overflow-y: auto;
     padding-left: 68px;
 }
 
@@ -51,9 +54,6 @@ body.markdown-content {
     border-left: none;
     background: var(--bg);
     overflow-y: auto;
-    position: sticky;
-    top: 0;
-    height: 100vh;
     padding: 8px 0;
     flex-shrink: 0;
 }
@@ -66,9 +66,6 @@ body.markdown-content {
     background: var(--border);
     opacity: 0.4;
     transition: opacity 0.15s, background 0.15s;
-    position: sticky;
-    top: 0;
-    height: 100vh;
 }
 
 .panel-resize-handle:hover,
@@ -403,6 +400,10 @@ body.markdown-content {
     background: var(--highlight);
 }
 
+.line-container.annotated:hover {
+    background: rgba(37, 99, 235, 0.2);
+}
+
 /* --- Gutter (positioned in the left margin) --- */
 .line-gutter {
     position: absolute;
@@ -450,7 +451,7 @@ body.diff-mode .line-number {
 }
 
 .line-container:hover .add-note-btn,
-.line-container.annotated .add-note-btn {
+.line-container.annotated-start .add-note-btn {
     opacity: 1;
 }
 
@@ -806,6 +807,12 @@ body.diff-mode .line-number {
 
 .comment-thread.active {
     box-shadow: 0 0 0 2px var(--accent);
+}
+
+.comment-thread.thread-highlight {
+    box-shadow: 0 0 0 2px var(--accent);
+    background: var(--highlight);
+    transition: box-shadow 0.15s, background 1.5s ease-out;
 }
 
 .comment-thread-header {

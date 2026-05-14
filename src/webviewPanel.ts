@@ -2,28 +2,18 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { marked } from 'marked';
-import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
+import { createHighlighter, bundledLanguagesInfo, type Highlighter, type BundledLanguage } from 'shiki';
 import { parse as parseYaml } from 'yaml';
 import { AnnotationStore } from './annotationStore';
 import { computeDiffHunks, DiffHunk } from './diffUtils';
 
-// Map file extensions to Shiki language IDs
-const EXT_TO_LANG: Record<string, string> = {
-    '.ts': 'typescript', '.tsx': 'tsx', '.js': 'javascript', '.jsx': 'jsx',
-    '.py': 'python', '.rs': 'rust', '.go': 'go', '.java': 'java',
-    '.c': 'c', '.cpp': 'cpp', '.h': 'c', '.hpp': 'cpp',
-    '.css': 'css', '.html': 'html', '.json': 'json', '.yaml': 'yaml',
-    '.yml': 'yaml', '.sh': 'bash', '.bash': 'bash', '.zsh': 'bash',
-    '.sql': 'sql', '.rb': 'ruby', '.php': 'php', '.swift': 'swift',
-    '.kt': 'kotlin', '.lua': 'lua', '.r': 'r', '.toml': 'toml',
-    '.xml': 'xml', '.svg': 'xml',
-};
 
 export class ReviewWebviewPanel {
     private panels = new Map<string, {
         panel: vscode.WebviewPanel,
         snapshotPath: string,
-        revisionsPath: string
+        revisionsPath: string,
+        lang: string | undefined,
     }>();
     private activeRevisionsPath: string = '';
     private highlighter: Highlighter | undefined;
@@ -62,15 +52,9 @@ export class ReviewWebviewPanel {
             return;
         }
 
-        const ext = path.extname(snapshotPath).toLowerCase();
-        const lang = EXT_TO_LANG[ext];
-
-        // Initialize Shiki highlighter (lazy, once) — only if we need it
-        if (lang && !this.highlighter) {
-            this.highlighter = await createHighlighter({
-                themes: ['dark-plus', 'light-plus'],
-                langs: Object.values(EXT_TO_LANG),
-            });
+        const lang = await this.resolveShikiLang(snapshotPath);
+        if (lang) {
+            await this.ensureHighlighterWithLang(lang);
         }
 
         const panel = vscode.window.createWebviewPanel(
@@ -86,9 +70,9 @@ export class ReviewWebviewPanel {
             },
         );
 
-        this.panels.set(originalPath, { panel, snapshotPath, revisionsPath });
+        this.panels.set(originalPath, { panel, snapshotPath, revisionsPath, lang });
 
-        panel.webview.html = this.getHtml(snapshotPath, panel);
+        panel.webview.html = this.getHtml(snapshotPath, panel, lang);
 
         // Handle messages from the WebView
         panel.webview.onDidReceiveMessage(
@@ -126,7 +110,7 @@ export class ReviewWebviewPanel {
         const lines = content.split('\n');
         const ext = path.extname(snapshotPath).toLowerCase();
         const isMarkdown = ext === '.md' || ext === '.markdown';
-        const lang = EXT_TO_LANG[ext];
+        const { lang } = ctx;
 
         let bodyContent = '';
         if (isMarkdown) {
@@ -188,9 +172,9 @@ export class ReviewWebviewPanel {
     }
 
     /** Compute diff hunks, apply Shiki syntax highlighting, and send showDiff to the webview. */
-    sendHighlightedDiff(originalPath: string, baseText: string, currentText: string, ext: string): void {
+    sendHighlightedDiff(originalPath: string, baseText: string, currentText: string): void {
         const hunks = computeDiffHunks(baseText, currentText);
-        const lang = EXT_TO_LANG[ext];
+        const lang = this.panels.get(originalPath)?.lang;
 
         if (lang && this.highlighter) {
             const theme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Light
@@ -231,12 +215,11 @@ export class ReviewWebviewPanel {
     }
 
     /** Generate the full HTML for the WebView. */
-    private getHtml(snapshotPath: string, panel: vscode.WebviewPanel): string {
+    private getHtml(snapshotPath: string, panel: vscode.WebviewPanel, lang: string | undefined): string {
         const content = fs.readFileSync(snapshotPath, 'utf-8');
         const lines = content.split('\n');
         const ext = path.extname(snapshotPath).toLowerCase();
         const isMarkdown = ext === '.md' || ext === '.markdown';
-        const lang = EXT_TO_LANG[ext];
 
         // Resolve media URIs for the WebView
         const cssUri = panel.webview.asWebviewUri(
@@ -731,6 +714,33 @@ export class ReviewWebviewPanel {
     private getSavedPanelWidthStyle(): string {
         const savedWidth = this.context.globalState.get<number>('reviewMode.panelWidth');
         return savedWidth ? ` style="width:${savedWidth}px"` : '';
+    }
+
+    /** Resolve a Shiki language ID for the given file by asking VS Code for its language. */
+    private async resolveShikiLang(filePath: string): Promise<string | undefined> {
+        try {
+            const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+            const vscodeLangId = doc.languageId;
+            if (!vscodeLangId || vscodeLangId === 'plaintext') { return undefined; }
+            const match = bundledLanguagesInfo.find(l =>
+                l.id === vscodeLangId || (l.aliases as string[] | undefined)?.includes(vscodeLangId)
+            );
+            return match?.id;
+        } catch {
+            return undefined;
+        }
+    }
+
+    /** Ensure the Shiki highlighter exists and has the given language loaded. */
+    private async ensureHighlighterWithLang(lang: string): Promise<void> {
+        if (!this.highlighter) {
+            this.highlighter = await createHighlighter({
+                themes: ['dark-plus', 'light-plus'],
+                langs: [lang as BundledLanguage],
+            });
+        } else if (!this.highlighter.getLoadedLanguages().includes(lang)) {
+            await this.highlighter.loadLanguage(lang as BundledLanguage);
+        }
     }
 
     private escapeHtml(text: string): string {

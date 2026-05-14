@@ -28,7 +28,6 @@ export function extractDiffContext(
     hunks: DiffHunk[],
     currentLineStart: number,
     currentLineEnd: number,
-    contextLines: number = 3,
 ): { previousVersionContext: string; currentVersionContext: string } | null {
     let currentLineNum = 0;
     const rows: Array<{ type: 'added' | 'removed' | 'unchanged'; text: string; currentLine: number | null }> = [];
@@ -57,19 +56,18 @@ export function extractDiffContext(
 
     if (firstRowIdx === -1) { return null; }
 
-    while (firstRowIdx > 0 && rows[firstRowIdx - 1].type === 'removed') { firstRowIdx--; }
-    while (lastRowIdx < rows.length - 1 && rows[lastRowIdx + 1].type === 'removed') { lastRowIdx++; }
-
+    // Only generate context when the annotated line itself is part of a change
     const hasChange = rows.slice(firstRowIdx, lastRowIdx + 1).some(r => r.type !== 'unchanged');
     if (!hasChange) { return null; }
 
-    const contextStart = Math.max(0, firstRowIdx - contextLines);
-    const contextEnd = Math.min(rows.length - 1, lastRowIdx + contextLines);
+    // Expand to the full enclosing hunk boundary
+    while (firstRowIdx > 0 && rows[firstRowIdx - 1].type !== 'unchanged') { firstRowIdx--; }
+    while (lastRowIdx < rows.length - 1 && rows[lastRowIdx + 1].type !== 'unchanged') { lastRowIdx++; }
 
     const previousLines: string[] = [];
     const currentLines: string[] = [];
 
-    for (let i = contextStart; i <= contextEnd; i++) {
+    for (let i = firstRowIdx; i <= lastRowIdx; i++) {
         const row = rows[i];
         if (row.type === 'removed') {
             previousLines.push(`-${row.text}`);

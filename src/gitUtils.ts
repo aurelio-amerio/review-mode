@@ -70,13 +70,21 @@ export async function getGitHistory(
     });
 }
 
-/** Returns the file content at a specific git commit. */
+/** Returns the file content at a specific git commit, or empty string if the file didn't exist yet. */
 export async function getGitFileContent(
     repoRoot: string,
     commitHash: string,
     relPath: string,
 ): Promise<string> {
-    return execGit(['show', `${commitHash}:${relPath}`], repoRoot);
+    try {
+        return await execGit(['show', `${commitHash}:${relPath}`], repoRoot);
+    } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes('exists on disk, but not in') || msg.includes('does not exist in')) {
+            return '';
+        }
+        throw err;
+    }
 }
 
 /**

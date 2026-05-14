@@ -29,6 +29,8 @@ export class ReviewModeController {
     private isGitAvailable: boolean = false;
     private gitRepoRoot: string = '';
     private gitRelPath: string = '';
+    private gitDiffSeq: number = 0;
+    private diffToggleCooldown: boolean = false;
 
     constructor(
         private store: AnnotationStore,
@@ -37,12 +39,15 @@ export class ReviewModeController {
         this.webview = new ReviewWebviewPanel(context, store);
         this.webview.onRevisionRequested = (originalPath: string, revision: number) => this.openRevision(originalPath, revision);
         this.webview.onDiffModeToggled = (originalPath: string, enabled: boolean) => {
+            if (this.diffToggleCooldown) { return; }
+            this.diffToggleCooldown = true;
+            setTimeout(() => { this.diffToggleCooldown = false; }, 300);
             this.diffModeEnabled = enabled;
+            // Echo authoritative state back so the webview stays in sync
+            this.webview.postMessageToPanel(originalPath, { type: 'syncDiffState', enabled: this.diffModeEnabled });
             if (enabled) {
-                // Restore persisted diff state (mode + pinned reference)
                 this.restoreDiffStateFromStore(originalPath);
             } else {
-                // UI-only reset — preserve persisted diffState for later restore
                 this.historyMode = 'local';
             }
             this.sendDiffToWebview(originalPath);
@@ -406,10 +411,7 @@ export class ReviewModeController {
             baseText = fs.readFileSync(baseSnapshotPath, 'utf-8');
         }
 
-        this.webview.sendHighlightedDiff(
-            originalPath, baseText, currentText,
-            path.extname(originalPath).toLowerCase(),
-        );
+        this.webview.sendHighlightedDiff(originalPath, baseText, currentText);
     }
 
     private async sendGitHistory(originalPath: string): Promise<void> {
@@ -461,13 +463,14 @@ export class ReviewModeController {
     private async sendGitDiffToWebview(originalPath: string, overrideCommitHash?: string): Promise<void> {
         const commitHash = overrideCommitHash ?? (this.pinnedRef?.type === 'git' ? this.pinnedRef.hash : null);
         if (!this.diffModeEnabled || !commitHash) { return; }
+        const seq = ++this.gitDiffSeq;
         try {
             const baseText = await getGitFileContent(
                 this.gitRepoRoot, commitHash, this.gitRelPath,
             );
+            if (seq !== this.gitDiffSeq || !this.diffModeEnabled) { return; }
             const currentText = fs.readFileSync(originalPath, 'utf-8');
-            const ext = path.extname(originalPath).toLowerCase();
-            this.webview.sendHighlightedDiff(originalPath, baseText, currentText, ext);
+            this.webview.sendHighlightedDiff(originalPath, baseText, currentText);
         } catch (err) {
             console.error('Review Mode: failed to compute git diff', err);
         }
