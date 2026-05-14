@@ -39,43 +39,58 @@ AI writes plan → Opens in Review Mode → You annotate → AI reads feedback �
 
 ## Setting Up with Your AI Tool
 
-### One-Click Install
+The VS Code extension automatically sets up the MCP server. You then install the **[review-mode-plugin](https://github.com/aurelio-amerio/review-mode-plugin)** to give your AI agent the skills and commands for the review workflow.
 
-The extension includes a unified **Install Skills** command that sets up everything you need — the MCP server, agent workflows, and editor-specific configuration — in a single step.
+### Plugin Installation
 
-1. Open the Command Palette (`Ctrl+Shift+P`) and run **Review Mode: Install Skills**, or click the ⬇ icon in the Review Mode sidebar panel.
-2. Pick your editor: **Cline**, **Cursor**, or **VS Code (Copilot)**.
-3. The extension will:
-   - Install (or upgrade) the `review-mode-mcp` server via [`uv tool`](https://docs.astral.sh/uv/)
-   - Copy the appropriate agent workflows and skills into the correct locations
-   - Register the MCP server in your editor's configuration
+#### Claude Code
 
-> **Prerequisite:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) must be installed and available on your PATH.
+Run these commands inside Claude Code:
 
-When you update the extension, you'll be prompted to re-run Install Skills so your agent files stay in sync.
+```
+/plugin marketplace add https://github.com/aurelio-amerio/review-mode-plugin
+/plugin install review-mode@review-mode-plugin
+```
 
-### What Gets Installed
+#### GitHub Copilot
 
-| Editor | MCP server | Workflows & skills | MCP config |
-|--------|-----------|-------------------|------------|
-| **Cursor** | `uv tool install review-mode-mcp` | Copied to `~/.cursor/plugins/local/review-mode/` (rules + skills + `mcp.json`) | Bundled in the plugin directory |
-| **Cline** | `uv tool install review-mode-mcp` | Copied into the workspace (`.clinerules/workflows/`, `.cline/skills/`) | Auto-added to Cline's `cline_mcp_settings.json` |
-| **VS Code (Copilot)** | `uv tool install review-mode-mcp` | Provided by the extension's built-in MCP definition provider | Registered automatically via VS Code's MCP API |
+Open the Command Palette (`Ctrl+Shift+P`) and run **Chat: Install Plugin From Source**, then enter:
 
-### Agent Workflows
+```
+https://github.com/aurelio-amerio/review-mode-plugin
+```
 
-After installation, your AI agent gains two slash-command workflows:
+#### Cursor
+
+Clone the repository into Cursor's local plugins directory:
+
+```bash
+git clone --depth 1 https://github.com/aurelio-amerio/review-mode-plugin ~/.cursor/plugins/local/review-mode-plugin
+```
+
+#### Codex
+
+Add the plugin from the GitHub marketplace:
+
+```bash
+codex plugin marketplace add aurelio-amerio/review-mode-plugin
+```
+
+Once added, browse and install the plugin from the Codex plugin directory.
+
+### Agent Commands
+
+After installation, your AI agent gains these slash-command workflows:
 
 | Command | What it does |
 |---------|-------------|
 | `/review-mode` | Opens the current plan (or a specified file) in Review Mode so you can annotate it with inline comments. |
 | `/update-plan` | Reads your annotations, implements the requested changes, resolves comments, and re-opens the file for another review round. |
-
-These workflows are installed as Cursor rules (`.mdc` files) or Cline workflow rules (`.md` files), and they teach the agent the full review loop automatically.
+| `/implement-review` | Reads your annotations, implements the requested changes, and resolves comments (for any file type: code, config, docs). |
 
 ### Manual MCP Configuration
 
-If you prefer to configure the MCP server manually instead of using Install Skills, install it with `uv` and add the JSON block to your MCP settings:
+The VS Code extension registers the MCP server automatically. If you need to configure it manually, install it with `uv` and add the JSON block to your MCP settings:
 
 ```bash
 uv tool install review-mode-mcp
