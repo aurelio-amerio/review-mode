@@ -592,8 +592,14 @@ export class ReviewWebviewPanel {
             case 'addNote': {
                 const content = fs.readFileSync(ctx.snapshotPath, 'utf-8');
                 const lines = content.split('\n');
-                const previewLine = lines[msg.startLine - 1]?.trim() || '';
-                const annotation = this.store.addAnnotation(msg.startLine, msg.endLine, previewLine, msg.text);
+                // Client sends textPreview for deleted lines (old-file content); fall back to current file
+                const previewLine = (msg.textPreview as string | undefined)
+                    ?? lines[msg.startLine - 1]?.trim()
+                    ?? '';
+                const opts = (msg.oldStartLine !== undefined)
+                    ? { oldStartLine: msg.oldStartLine as number, oldEndLine: (msg.oldEndLine ?? msg.oldStartLine) as number }
+                    : undefined;
+                const annotation = this.store.addAnnotation(msg.startLine, msg.endLine, previewLine, msg.text, opts);
                 const isNewAnnotation = annotation.thread.length === 1;
                 if (isNewAnnotation && msg.previousVersionContext && msg.currentVersionContext) {
                     annotation.previousVersionContext = msg.previousVersionContext;
