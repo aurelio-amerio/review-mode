@@ -53,8 +53,9 @@ body.markdown-content {
     max-width: 700px;
     border-left: none;
     background: var(--bg);
-    overflow-y: auto;
-    padding: 8px 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     flex-shrink: 0;
 }
 
@@ -79,7 +80,8 @@ body.markdown-content {
     display: flex;
     border-bottom: 1px solid var(--border);
     padding: 0;
-    margin-bottom: 8px;
+    flex-shrink: 0;
+    background: var(--bg);
 }
 
 .pane-tab {
@@ -110,6 +112,10 @@ body.markdown-content {
 /* --- Tab Content Visibility --- */
 .tab-content {
     display: none;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 8px 0;
 }
 
 .tab-content.active {
@@ -124,6 +130,7 @@ body.markdown-content {
     padding: 6px 14px;
     border-bottom: 1px solid var(--border);
     background: rgba(255, 255, 255, 0.02);
+    flex-shrink: 0;
 }
 
 .toolbar-group {
@@ -857,31 +864,31 @@ body.diff-mode .line-gutter {
 
 /* --- Deleted-line warning styles --- */
 .deleted-line-thread {
-    border-color: rgba(251, 191, 36, 0.3);
+    border-color: rgba(248, 113, 113, 0.3);
 }
 
 .deleted-line-header {
     background: repeating-linear-gradient(-45deg,
-            rgba(251, 191, 36, 0.06),
-            rgba(251, 191, 36, 0.06) 4px,
-            rgba(251, 191, 36, 0.12) 4px,
-            rgba(251, 191, 36, 0.12) 8px);
-    color: #fbbf24;
+            rgba(248, 113, 113, 0.06),
+            rgba(248, 113, 113, 0.06) 4px,
+            rgba(248, 113, 113, 0.12) 4px,
+            rgba(248, 113, 113, 0.12) 8px);
+    color: #f87171;
 }
 
 .deleted-line-header:hover {
     background: repeating-linear-gradient(-45deg,
-            rgba(251, 191, 36, 0.10),
-            rgba(251, 191, 36, 0.10) 4px,
-            rgba(251, 191, 36, 0.18) 4px,
-            rgba(251, 191, 36, 0.18) 8px);
+            rgba(248, 113, 113, 0.10),
+            rgba(248, 113, 113, 0.10) 4px,
+            rgba(248, 113, 113, 0.18) 4px,
+            rgba(248, 113, 113, 0.18) 8px);
 }
 
 .deleted-line-badge {
     font-size: 0.75em;
     font-weight: 600;
-    color: #fbbf24;
-    background: rgba(251, 191, 36, 0.12);
+    color: #f87171;
+    background: rgba(248, 113, 113, 0.12);
     padding: 1px 5px;
     border-radius: 3px;
     margin-left: 4px;

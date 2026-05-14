@@ -571,6 +571,8 @@ export class ReviewWebviewPanel {
                 priority: a.priority || 'none',
                 status: a.status || 'open',
                 deletedLine: a.deletedLine || false,
+                oldStartLine: a.oldStartLine,
+                oldEndLine: a.oldEndLine,
                 threadCount: a.thread.length,
                 thread: a.thread.map(m => ({
                     id: m.id,

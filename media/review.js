@@ -422,7 +422,8 @@
 
         for (const ann of annotations) {
             const thread = document.createElement('div');
-            thread.className = 'comment-thread' + (ann.deletedLine ? ' deleted-line-thread' : '');
+            const isDeletedLine = ann.deletedLine || ann.oldStartLine !== undefined;
+            thread.className = 'comment-thread' + (isDeletedLine ? ' deleted-line-thread' : '');
             thread.dataset.annotationId = ann.id;
 
             const rangeText = ann.startLine === ann.endLine
@@ -446,10 +447,10 @@
                 'wont-fix': "Won't Fix"
             };
 
-            const deletedBadge = ann.deletedLine ? ' <span class="deleted-line-badge">[deleted]</span>' : '';
+            const deletedBadge = isDeletedLine ? ' <span class="deleted-line-badge">[deleted]</span>' : '';
 
             let headerHtml = `
-                <div class="comment-thread-header${ann.deletedLine ? ' deleted-line-header' : ''}" data-scroll-line="${ann.startLine}">
+                <div class="comment-thread-header${isDeletedLine ? ' deleted-line-header' : ''}" data-scroll-line="${ann.startLine}">
                     <span class="comment-thread-line">${rangeText}${deletedBadge}</span>
                     <select class="priority-select priority-${priority}" data-priority-for="${ann.id}">
                         <option value="none"${priority === 'none' ? ' selected' : ''}>—</option>
@@ -1052,6 +1053,11 @@
         for (const ann of annotations) {
             // Determine the primary display container (deleted lines use old-line lookup)
             const isDeletedAnnotation = ann.oldStartLine !== undefined;
+
+            // In regular (non-diff) mode, deleted-line annotations have no corresponding
+            // line in the current file view — skip all file-level highlights and badges.
+            if (isDeletedAnnotation && !diffModeEnabled) { continue; }
+
             const primaryContainer = isDeletedAnnotation
                 ? document.querySelector(`.line-container[data-old-line="${ann.oldStartLine}"]`)
                 : document.querySelector(`.line-container[data-line="${ann.startLine}"]`);

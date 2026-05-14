@@ -249,7 +249,10 @@ export class AnnotationStore {
             status: 'open',
             thread: [{ id: this.generateId(), text, createdAt: new Date().toISOString() }],
         };
-        if (opts?.oldStartLine !== undefined) { annotation.oldStartLine = opts.oldStartLine; }
+        if (opts?.oldStartLine !== undefined) {
+            annotation.oldStartLine = opts.oldStartLine;
+            annotation.deletedLine = true;
+        }
         if (opts?.oldEndLine !== undefined) { annotation.oldEndLine = opts.oldEndLine; }
         this.annotations.push(annotation);
         this.annotations.sort((a, b) => a.startLine - b.startLine);
