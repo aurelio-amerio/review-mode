@@ -941,41 +941,64 @@
     }
 
     function updateAnnotationHighlights(annotations) {
-        // Clear previous highlights
         document.querySelectorAll('.line-container.annotated').forEach(el => {
-            el.classList.remove('annotated', 'annotated-start');
+            el.classList.remove('annotated');
         });
         document.querySelectorAll('.annotation-badge').forEach(el => el.remove());
         document.querySelectorAll('.annotation-indicator').forEach(el => el.remove());
 
         for (const ann of annotations) {
+            // Determine the primary display container (deleted lines use old-line lookup)
+            const isDeletedAnnotation = ann.oldStartLine !== undefined;
+            const primaryContainer = isDeletedAnnotation
+                ? document.querySelector(`.line-container[data-old-line="${ann.oldStartLine}"]`)
+                : document.querySelector(`.line-container[data-line="${ann.startLine}"]`);
+
+            if (primaryContainer) {
+                // Inject badge into gutter (before the first line-number span)
+                const gutter = primaryContainer.querySelector('.line-gutter');
+                if (gutter) {
+                    const badge = document.createElement('span');
+                    badge.className = 'annotation-badge';
+                    badge.textContent = `${ann.threadCount}`;
+                    badge.title = `${ann.threadCount} comment(s)`;
+                    const firstLineNum = gutter.querySelector('.line-number');
+                    if (firstLineNum) {
+                        gutter.insertBefore(badge, firstLineNum);
+                    } else {
+                        gutter.appendChild(badge);
+                    }
+                }
+            }
+
+            // Highlight all new-file lines in the annotation range
             for (let i = ann.startLine; i <= ann.endLine; i++) {
                 const container = document.querySelector(`.line-container[data-line="${i}"]`);
-                if (container) {
-                    const isDiffLine = container.classList.contains('diff-added') || container.classList.contains('diff-removed');
+                if (!container) { continue; }
+                const isDiffLine = container.classList.contains('diff-added') || container.classList.contains('diff-removed');
+                if (isDiffLine) {
+                    if (!container.nextElementSibling || !container.nextElementSibling.classList.contains('annotation-indicator')) {
+                        const indicator = document.createElement('div');
+                        indicator.className = 'annotation-indicator';
+                        container.after(indicator);
+                    }
+                } else {
+                    container.classList.add('annotated');
+                }
+            }
 
-                    if (isDiffLine) {
-                        // For diff lines: add a thin blue indicator bar below instead of overlaying background
-                        // Only add one indicator per line (check if already present)
+            // For deleted annotations: also highlight the deleted-line containers
+            if (isDeletedAnnotation) {
+                const oldStart = ann.oldStartLine;
+                const oldEnd = ann.oldEndLine ?? ann.oldStartLine;
+                for (let i = oldStart; i <= oldEnd; i++) {
+                    const container = document.querySelector(`.line-container[data-old-line="${i}"]`);
+                    if (container) {
                         if (!container.nextElementSibling || !container.nextElementSibling.classList.contains('annotation-indicator')) {
                             const indicator = document.createElement('div');
                             indicator.className = 'annotation-indicator';
                             container.after(indicator);
                         }
-                    } else {
-                        // For unchanged lines: use the normal annotated highlight
-                        container.classList.add('annotated');
-                        if (i === ann.startLine) { container.classList.add('annotated-start'); }
-                    }
-
-                    // Badge on the start line (works for both diff and non-diff lines)
-                    if (i === ann.startLine) {
-                        const badge = document.createElement('span');
-                        badge.className = 'annotation-badge';
-                        badge.dataset.annotationId = ann.id;
-                        badge.textContent = `${ann.threadCount}`;
-                        badge.title = `${ann.threadCount} comment(s)`;
-                        container.appendChild(badge);
                     }
                 }
             }
