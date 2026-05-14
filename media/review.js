@@ -579,6 +579,7 @@
         const totalCurrentLines = hunks.reduce((sum, h) => h.type !== 'removed' ? sum + h.lines.length : sum, 0);
         const addNoteIcon = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3l3 3 3-3h3a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm0 9h-3.5L8 12.5 5.5 10H2V2h12v8z"/><path d="M7.25 4v2.25H5v1.5h2.25V10h1.5V7.75H11v-1.5H8.75V4z"/></svg>';
         let html = '';
+        let oldLineNum = 0;
         let currentLineNum = 0;
 
         for (const hunk of hunks) {
@@ -586,11 +587,13 @@
                 const line = hunk.lines[i];
                 const lineHtml = (hunk.highlightedLines && hunk.highlightedLines[i]) || escapeHtml(line) || '&nbsp;';
                 if (hunk.type === 'removed') {
+                    oldLineNum++;
                     const anchorLine = Math.min(currentLineNum + 1, totalCurrentLines || 1);
-                    html += `<div class="line-container diff-removed" data-diff-type="removed">
+                    html += `<div class="line-container diff-removed" data-line="${anchorLine}" data-old-line="${oldLineNum}" data-diff-type="removed">
     <div class="line-gutter">
-        <button class="add-note-btn" data-line="${anchorLine}" title="Add comment">${addNoteIcon}</button>
-        <span class="line-number"></span>
+        <button class="add-note-btn" data-line="${anchorLine}" data-old-line="${oldLineNum}" title="Add comment">${addNoteIcon}</button>
+        <span class="line-number old-line-number">${oldLineNum}</span>
+        <span class="line-number new-line-number"></span>
         <span class="diff-gutter-marker removed">−</span>
     </div>
     <div class="line-content">${lineHtml}</div>
@@ -600,17 +603,20 @@
                     html += `<div class="line-container diff-added" data-line="${currentLineNum}" data-diff-type="added">
     <div class="line-gutter">
         <button class="add-note-btn" data-line="${currentLineNum}" title="Add comment">${addNoteIcon}</button>
-        <span class="line-number">${currentLineNum}</span>
+        <span class="line-number old-line-number"></span>
+        <span class="line-number new-line-number">${currentLineNum}</span>
         <span class="diff-gutter-marker added">+</span>
     </div>
     <div class="line-content">${lineHtml}</div>
 </div>\n`;
                 } else {
+                    oldLineNum++;
                     currentLineNum++;
                     html += `<div class="line-container" data-line="${currentLineNum}">
     <div class="line-gutter">
         <button class="add-note-btn" data-line="${currentLineNum}" title="Add comment">${addNoteIcon}</button>
-        <span class="line-number">${currentLineNum}</span>
+        <span class="line-number old-line-number">${oldLineNum}</span>
+        <span class="line-number new-line-number">${currentLineNum}</span>
     </div>
     <div class="line-content">${lineHtml}</div>
 </div>\n`;
