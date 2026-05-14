@@ -17,6 +17,8 @@ export interface Annotation {
     id: string;
     startLine: number;
     endLine: number;
+    oldStartLine?: number;
+    oldEndLine?: number;
     textPreview: string;
     priority: Priority;
     status: Status;
@@ -228,7 +230,13 @@ export class AnnotationStore {
     }
 
     /** Add a new annotation (new thread) at the given line range. */
-    addAnnotation(startLine: number, endLine: number, textPreview: string, text: string): Annotation {
+    addAnnotation(
+        startLine: number,
+        endLine: number,
+        textPreview: string,
+        text: string,
+        opts?: { oldStartLine?: number; oldEndLine?: number },
+    ): Annotation {
         const existing = this.annotations.find(a => a.startLine === startLine && a.endLine === endLine);
         if (existing) { this.addMessage(existing.id, text); return existing; }
 
@@ -241,6 +249,8 @@ export class AnnotationStore {
             status: 'open',
             thread: [{ id: this.generateId(), text, createdAt: new Date().toISOString() }],
         };
+        if (opts?.oldStartLine !== undefined) { annotation.oldStartLine = opts.oldStartLine; }
+        if (opts?.oldEndLine !== undefined) { annotation.oldEndLine = opts.oldEndLine; }
         this.annotations.push(annotation);
         this.annotations.sort((a, b) => a.startLine - b.startLine);
         this.saveCurrentRevision();
