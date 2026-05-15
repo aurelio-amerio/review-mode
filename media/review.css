@@ -44,7 +44,7 @@ body.markdown-content {
     min-width: 8px;
     overflow-x: auto;
     overflow-y: auto;
-    padding-left: 68px;
+    padding-left: 80px;
     position: relative;
 }
 
@@ -224,21 +224,21 @@ body.markdown-content {
 }
 
 /* --- Diff line highlighting --- */
-.line-container.diff-added {
-    background: rgba(74, 222, 128, 0.08);
+.line-container.diff-added .line-content {
     border-left-color: #4ade80;
+    background: rgba(74, 222, 128, 0.08);
 }
 
-.line-container.diff-added:hover {
+.line-container.diff-added:hover .line-content {
     background: rgba(74, 222, 128, 0.14);
 }
 
-.line-container.diff-removed {
-    background: rgba(248, 113, 113, 0.08);
+.line-container.diff-removed .line-content {
     border-left-color: #f87171;
+    background: rgba(248, 113, 113, 0.08);
 }
 
-.line-container.diff-removed:hover {
+.line-container.diff-removed:hover .line-content {
     background: rgba(248, 113, 113, 0.14);
 }
 
@@ -389,9 +389,8 @@ body.markdown-content {
 .line-container {
     position: relative;
     min-height: 1.4em;
-    border-left: 3px solid transparent;
-    transition: border-color 0.15s, background 0.15s;
-    padding-left: 4px;
+    transition: background 0.15s;
+    padding-left: 18px;
 }
 
 /* Empty lines should collapse to a thin spacer */
@@ -403,12 +402,11 @@ body.markdown-content {
     background: var(--hover-bg);
 }
 
-.line-container.annotated {
-    border-left-color: var(--accent);
+.line-container.annotated .line-content {
     background: var(--highlight);
 }
 
-.line-container.annotated:hover {
+.line-container.annotated:hover .line-content {
     background: rgba(37, 99, 235, 0.2);
 }
 
@@ -416,16 +414,19 @@ body.markdown-content {
 .line-gutter {
     position: absolute;
     left: -64px;
-    top: 2px;
+    top: 0;
+    bottom: 0;
+    width: 60px;
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 4px;
     user-select: none;
 }
 
 .line-number {
     color: var(--vscode-editorLineNumber-foreground, #858585);
-    font-size: 0.8em;
+    font-size: 1em;
     min-width: 24px;
     text-align: right;
     font-family: var(--vscode-editor-font-family, 'Consolas', monospace);
@@ -454,6 +455,7 @@ body.diff-mode .code-pane {
 
 body.diff-mode .line-gutter {
     left: -100px;
+    width: 96px;
 }
 
 .add-note-btn {
@@ -489,10 +491,16 @@ body.diff-mode .line-gutter {
 /* --- Line content --- */
 .line-content {
     flex: 1;
-    padding: 0 16px 0 0;
+    padding: 0 16px 0 4px;
     white-space: pre-wrap;
     word-break: break-word;
     overflow: hidden; /* BFC: contains child margins so they don't bleed out of .line-container */
+    border-left: 3px solid transparent;
+    transition: border-color 0.15s;
+}
+
+.line-container.annotated .line-content {
+    border-left-color: var(--accent);
 }
 
 /* --- Annotation count badge --- */
