@@ -3,7 +3,7 @@
   "publisher": "aurelio-amerio",
   "displayName": "Review Mode",
   "description": "A comprehensive review tool for Markdown that allows adding threaded annotations, tracking revisions, and managing comments.",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "icon": "media/icon.png",
   "author": "aurelio-amerio",
   "license": "MIT",

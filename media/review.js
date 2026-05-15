@@ -41,6 +41,14 @@
     /** @type {boolean} */
     let isGitAvailable = false;
 
+    // --- Search state ---
+    /** @type {Element[]} */
+    let searchMatches = [];
+    /** @type {number} */
+    let searchCurrentIdx = -1;
+    /** @type {boolean} */
+    let searchVisible = false;
+
     // --- Tab switching & State ---
     function activateTab(tabId) {
         document.querySelectorAll('.pane-tab').forEach(t => t.classList.remove('active'));
@@ -346,7 +354,8 @@
         const targetRect = targetContainer.getBoundingClientRect();
         const top = targetRect.bottom - paneRect.top + codePaneEl.scrollTop;
         form.style.top = top + 'px';
-        form.style.left = '68px';
+        const paneLeft = parseInt(window.getComputedStyle(codePaneEl).paddingLeft, 10) || 136;
+        form.style.left = (paneLeft + 8) + 'px';
         codePaneEl.appendChild(form);
         activeForm = form;
 
@@ -492,17 +501,21 @@
                 const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 messagesHtml += `
                     <div class="comment-message" data-msg-id="${msg.id}" data-annotation-id="${ann.id}">
-                        <button class="comment-message-edit" data-edit-msg="${msg.id}" data-annotation-id="${ann.id}" title="Edit"><span class="codicon codicon-edit"></span></button>
-                        <button class="comment-message-delete" data-delete-msg="${msg.id}" data-annotation-id="${ann.id}" title="Delete"><span class="codicon codicon-trash"></span></button>
                         <div class="comment-message-text">${escapeHtml(msg.text)}</div>
-                        <div class="comment-message-time">${time}</div>
+                        <div class="comment-message-footer">
+                            <div class="comment-message-time">${time}</div>
+                            <div class="comment-message-actions">
+                                <button class="comment-message-edit" data-edit-msg="${msg.id}" data-annotation-id="${ann.id}" title="Edit"><span class="codicon codicon-edit"></span></button>
+                                <button class="comment-message-delete" data-delete-msg="${msg.id}" data-annotation-id="${ann.id}" title="Delete"><span class="codicon codicon-trash"></span></button>
+                            </div>
+                        </div>
                     </div>
                 `;
             }
 
             const replyHtml = `
                 <div class="comment-reply-area">
-                    <input class="comment-reply-input" placeholder="Reply..." data-reply-to="${ann.id}" />
+                    <textarea class="comment-reply-input" placeholder="Reply..." data-reply-to="${ann.id}" rows="1"></textarea>
                     <button class="comment-reply-btn" data-reply-submit="${ann.id}">↵</button>
                 </div>
             `;
@@ -657,6 +670,70 @@
             return;
         }
 
+        // Edit message
+        const editBtn = e.target.closest('.comment-message-edit');
+        if (editBtn) {
+            const annotationId = editBtn.dataset.annotationId;
+            const messageId = editBtn.dataset.editMsg;
+            const msgEl = document.querySelector(`.comment-message[data-msg-id="${messageId}"][data-annotation-id="${annotationId}"]`);
+            if (!msgEl) { return; }
+            const textEl = msgEl.querySelector('.comment-message-text');
+            if (!textEl) { return; }
+            const originalText = textEl.textContent || '';
+
+            const textarea = document.createElement('textarea');
+            textarea.className = 'comment-message-edit-area';
+            textarea.value = originalText;
+            textEl.replaceWith(textarea);
+            msgEl.classList.add('editing');
+
+            const autoResize = () => {
+                textarea.style.height = 'auto';
+                const capped = Math.min(textarea.scrollHeight, 160);
+                textarea.style.height = capped + 'px';
+                textarea.style.overflowY = textarea.scrollHeight > 160 ? 'auto' : 'hidden';
+            };
+            textarea.addEventListener('input', autoResize);
+            autoResize();
+            textarea.focus();
+            textarea.setSelectionRange(originalText.length, originalText.length);
+
+            const actions = document.createElement('div');
+            actions.className = 'comment-message-edit-actions';
+            actions.innerHTML = `
+                <button class="inline-comment-cancel comment-edit-cancel">Cancel</button>
+                <button class="inline-comment-submit comment-edit-save">Save</button>
+            `;
+            textarea.insertAdjacentElement('afterend', actions);
+
+            const cancelEdit = () => {
+                const div = document.createElement('div');
+                div.className = 'comment-message-text';
+                div.textContent = originalText;
+                textarea.replaceWith(div);
+                actions.remove();
+                msgEl.classList.remove('editing');
+            };
+
+            const saveEdit = () => {
+                const newText = textarea.value.trim();
+                msgEl.classList.remove('editing');
+                if (newText && newText !== originalText) {
+                    vscode.postMessage({ type: 'editMessage', annotationId, messageId, text: newText });
+                } else {
+                    cancelEdit();
+                }
+            };
+
+            actions.querySelector('.comment-edit-cancel').addEventListener('click', cancelEdit);
+            actions.querySelector('.comment-edit-save').addEventListener('click', saveEdit);
+            textarea.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); saveEdit(); }
+                if (ev.key === 'Escape') { cancelEdit(); }
+            });
+            return;
+        }
+
         // Reply submit button
         const replyBtn = e.target.closest('.comment-reply-btn');
         if (replyBtn) {
@@ -669,14 +746,17 @@
                     text: input.value.trim(),
                 });
                 input.value = '';
+                input.style.height = '';
+                input.style.overflowY = 'hidden';
             }
             return;
         }
     });
 
-    // Reply on Enter key in reply input
+    // Reply on Enter key in reply textarea (Shift+Enter inserts newline)
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && e.target.classList.contains('comment-reply-input')) {
+        if (e.key === 'Enter' && !e.shiftKey && e.target.classList.contains('comment-reply-input')) {
+            e.preventDefault();
             const annotationId = e.target.dataset.replyTo;
             const text = e.target.value.trim();
             if (text) {
@@ -686,7 +766,21 @@
                     text: text,
                 });
                 e.target.value = '';
+                e.target.style.height = '';
+                e.target.style.overflowY = 'hidden';
             }
+        }
+    });
+
+    // Auto-resize reply textareas (add border height so box-sizing: border-box doesn't shrink the field)
+    document.addEventListener('input', (e) => {
+        if (e.target.classList.contains('comment-reply-input')) {
+            const el = e.target;
+            el.style.height = 'auto';
+            const border = el.offsetHeight - el.clientHeight;
+            const total = el.scrollHeight + border;
+            el.style.height = Math.min(total, 80) + 'px';
+            el.style.overflowY = total > 80 ? 'auto' : 'hidden';
         }
     });
 
@@ -745,13 +839,202 @@
             }
         }
 
+        const restoreWidget = preserveAndRestoreWidget(codePane);
         codePane.innerHTML = html;
+        restoreWidget();
+        resetSearch();
     }
 
     function clearDiff() {
         currentDiffHunks = null;
         document.body.classList.remove('diff-mode');
     }
+
+    // --- Search ---
+
+    function preserveAndRestoreWidget(codePane) {
+        const anchor = document.getElementById('search-anchor');
+        if (!anchor) { return function () {}; }
+        anchor.remove();
+        return function restore() {
+            codePane.insertBefore(anchor, codePane.firstChild);
+        };
+    }
+
+    function openSearch() {
+        const widget = document.getElementById('search-widget');
+        if (!widget) { return; }
+        searchVisible = true;
+        widget.setAttribute('aria-hidden', 'false');
+        const input = /** @type {HTMLInputElement} */ (document.getElementById('search-input'));
+        if (input) {
+            input.focus();
+            input.select();
+            if (input.value) { runSearch(input.value); }
+        }
+    }
+
+    function closeSearch() {
+        const widget = document.getElementById('search-widget');
+        if (!widget) { return; }
+        searchVisible = false;
+        widget.setAttribute('aria-hidden', 'true');
+        clearSearchHighlights();
+        updateSearchCount();
+    }
+
+    function clearSearchHighlights() {
+        document.querySelectorAll('mark.search-highlight').forEach(function (mark) {
+            var parent = mark.parentNode;
+            if (parent) {
+                parent.replaceChild(document.createTextNode(mark.textContent || ''), mark);
+                parent.normalize();
+            }
+        });
+        searchMatches = [];
+        searchCurrentIdx = -1;
+    }
+
+    function updateSearchCount() {
+        const countEl = document.getElementById('search-count');
+        const prevBtn = /** @type {HTMLButtonElement|null} */ (document.getElementById('search-prev'));
+        const nextBtn = /** @type {HTMLButtonElement|null} */ (document.getElementById('search-next'));
+        if (!countEl) { return; }
+
+        const input = /** @type {HTMLInputElement|null} */ (document.getElementById('search-input'));
+        const hasQuery = searchVisible && !!(input && input.value);
+        const noResults = hasQuery && searchMatches.length === 0;
+
+        if (!hasQuery) {
+            countEl.textContent = 'No results';
+            countEl.classList.toggle('no-results', searchVisible);
+        } else if (noResults) {
+            countEl.textContent = 'No results';
+            countEl.classList.add('no-results');
+        } else {
+            countEl.textContent = (searchCurrentIdx + 1) + ' of ' + searchMatches.length;
+            countEl.classList.remove('no-results');
+        }
+
+        if (prevBtn) { prevBtn.disabled = !hasQuery || noResults; }
+        if (nextBtn) { nextBtn.disabled = !hasQuery || noResults; }
+    }
+
+    function highlightInElement(el, lowerQuery, origQuery) {
+        var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+        var textNodes = [];
+        var node;
+        while ((node = walker.nextNode())) { textNodes.push(node); }
+
+        var marks = [];
+        textNodes.forEach(function (textNode) {
+            var text = textNode.nodeValue || '';
+            var lowerText = text.toLowerCase();
+            var idx = lowerText.indexOf(lowerQuery);
+            if (idx === -1) { return; }
+
+            var frag = document.createDocumentFragment();
+            var lastIdx = 0;
+            while (idx !== -1) {
+                if (idx > lastIdx) {
+                    frag.appendChild(document.createTextNode(text.slice(lastIdx, idx)));
+                }
+                var mark = document.createElement('mark');
+                mark.className = 'search-highlight';
+                mark.textContent = text.slice(idx, idx + origQuery.length);
+                frag.appendChild(mark);
+                marks.push(mark);
+                lastIdx = idx + origQuery.length;
+                idx = lowerText.indexOf(lowerQuery, lastIdx);
+            }
+            if (lastIdx < text.length) {
+                frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+            }
+            if (textNode.parentNode) {
+                textNode.parentNode.replaceChild(frag, textNode);
+            }
+        });
+        return marks;
+    }
+
+    function runSearch(query) {
+        clearSearchHighlights();
+        if (!query) {
+            updateSearchCount();
+            return;
+        }
+        const lowerQuery = query.toLowerCase();
+        document.querySelectorAll('.line-container:not(.diff-removed) .line-content').forEach(function (contentEl) {
+            var marks = highlightInElement(contentEl, lowerQuery, query);
+            marks.forEach(function (m) { searchMatches.push(m); });
+        });
+        if (searchMatches.length > 0) {
+            searchCurrentIdx = 0;
+            applyCurrentMatch();
+        }
+        updateSearchCount();
+    }
+
+    function applyCurrentMatch() {
+        document.querySelectorAll('mark.search-highlight.search-match-current').forEach(function (el) {
+            el.classList.remove('search-match-current');
+        });
+        if (searchCurrentIdx < 0 || searchCurrentIdx >= searchMatches.length) { return; }
+        const current = searchMatches[searchCurrentIdx];
+        current.classList.add('search-match-current');
+        current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function navigateSearch(direction) {
+        if (searchMatches.length === 0) { return; }
+        searchCurrentIdx = (searchCurrentIdx + direction + searchMatches.length) % searchMatches.length;
+        applyCurrentMatch();
+        updateSearchCount();
+    }
+
+    function resetSearch() {
+        clearSearchHighlights();
+        updateSearchCount();
+        const input = /** @type {HTMLInputElement} */ (document.getElementById('search-input'));
+        if (input && input.value) {
+            setTimeout(function () { runSearch(input.value); }, 0);
+        }
+    }
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'f' && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            openSearch();
+            return;
+        }
+        if (!searchVisible) { return; }
+        if (e.key === 'Escape') {
+            const widget = document.getElementById('search-widget');
+            if (widget && (widget.contains(document.activeElement) || !activeForm)) {
+                e.preventDefault();
+                closeSearch();
+            }
+            return;
+        }
+        if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'search-input') {
+            e.preventDefault();
+            navigateSearch(e.shiftKey ? -1 : 1);
+        }
+    });
+
+    document.addEventListener('input', function (e) {
+        if (e.target && /** @type {HTMLElement} */ (e.target).id === 'search-input') {
+            runSearch(/** @type {HTMLInputElement} */ (e.target).value);
+        }
+    });
+
+    document.addEventListener('click', function (e) {
+        if (!e.target) { return; }
+        const id = /** @type {HTMLElement} */ (e.target).id;
+        if (id === 'search-prev') { navigateSearch(-1); return; }
+        if (id === 'search-next') { navigateSearch(1); return; }
+        if (id === 'search-close') { closeSearch(); return; }
+    });
 
     // --- Handle messages from extension ---
     window.addEventListener('message', (event) => {
@@ -777,7 +1060,10 @@
         if (msg.type === 'replaceContent') {
             const codePane = document.querySelector('.code-pane');
             if (codePane) {
+                const restore = preserveAndRestoreWidget(codePane);
                 codePane.innerHTML = msg.html;
+                restore();
+                resetSearch();
             }
         }
         if (msg.type === 'showDiff') {

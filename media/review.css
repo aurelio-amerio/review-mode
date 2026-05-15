@@ -1054,7 +1054,6 @@ body.diff-mode .line-number {
     border-top: 1px solid var(--comment-border);
     font-size: 1em;
     line-height: 1.5;
-    position: relative;
 }
 
 .comment-message:first-child {
@@ -1063,55 +1062,67 @@ body.diff-mode .line-number {
 
 .comment-message-text {
     word-break: break-word;
+    white-space: pre-wrap;
+    max-height: 15em; /* ~10 lines at 1.5 line-height */
+    overflow-y: auto;
+}
+
+.comment-message-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 3px;
 }
 
 .comment-message-time {
     font-size: 0.75em;
     color: var(--vscode-descriptionForeground, #888);
-    margin-top: 2px;
 }
 
-.comment-message-delete {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    background: none;
-    border: none;
-    color: var(--vscode-descriptionForeground, #888);
-    cursor: pointer;
-    font-size: 16px;
+.comment-message-actions {
+    display: flex;
+    gap: 2px;
     opacity: 0;
     transition: opacity 0.15s;
 }
 
-.comment-message:hover .comment-message-delete {
-    opacity: 0.6;
+.comment-message:hover .comment-message-actions {
+    opacity: 1;
+}
+
+.comment-message.editing .comment-message-actions {
+    display: none;
+}
+
+.comment-message-delete {
+    background: none;
+    border: none;
+    color: var(--vscode-descriptionForeground, #888);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 1px 3px;
+    border-radius: 3px;
+    transition: color 0.15s;
+    line-height: 1;
 }
 
 .comment-message-delete:hover {
-    opacity: 1 !important;
     color: var(--vscode-errorForeground, #f44);
 }
 
 .comment-message-edit {
-    position: absolute;
-    top: 6px;
-    right: 26px;
     background: none;
     border: none;
     color: var(--vscode-descriptionForeground, #888);
     cursor: pointer;
-    font-size: 16px;
-    opacity: 0;
-    transition: opacity 0.15s;
-}
-
-.comment-message:hover .comment-message-edit {
-    opacity: 0.6;
+    font-size: 14px;
+    padding: 1px 3px;
+    border-radius: 3px;
+    transition: color 0.15s;
+    line-height: 1;
 }
 
 .comment-message-edit:hover {
-    opacity: 1 !important;
     color: var(--accent, #3b82f6);
 }
 
@@ -1126,8 +1137,11 @@ body.diff-mode .line-number {
     font-size: 1em;
     padding: 4px 8px;
     outline: none;
-    resize: vertical;
-    min-height: 56px;
+    resize: none;
+    overflow-y: hidden;
+    min-height: 34px;
+    max-height: 160px;
+    line-height: 1.4;
 }
 
 .comment-message-edit-area:focus {
@@ -1146,6 +1160,7 @@ body.diff-mode .line-number {
     gap: 4px;
     padding: 6px 8px;
     border-top: 1px solid var(--comment-border);
+    align-items: flex-end;
 }
 
 .comment-reply-input {
@@ -1154,11 +1169,15 @@ body.diff-mode .line-number {
     background: var(--vscode-input-background);
     color: var(--vscode-input-foreground);
     border: 1px solid var(--vscode-input-border, #444);
-    padding: 4px 8px;
+    padding: 3px 7px;
     border-radius: 3px;
     font-family: inherit;
-    font-size: 1em;
+    font-size: 0.9em;
     outline: none;
+    resize: none;
+    overflow-y: hidden;
+    line-height: 1.4;
+    box-sizing: border-box;
 }
 
 .comment-reply-input:focus {
@@ -1169,10 +1188,10 @@ body.diff-mode .line-number {
     background: var(--accent);
     color: white;
     border: none;
-    padding: 4px 10px;
+    padding: 3px 9px;
     border-radius: 3px;
     cursor: pointer;
-    font-size: 1em;
+    font-size: 0.9em;
     flex-shrink: 0;
 }
 
@@ -1391,4 +1410,101 @@ body.diff-mode .line-number {
 .load-more-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* ── Search Widget ── */
+
+/* Zero-height sticky anchor — sticks to top of code-pane viewport without pushing content */
+.search-anchor {
+    position: sticky;
+    top: 0;
+    height: 0;
+    overflow: visible;
+    z-index: 100;
+}
+
+/* Floating card, absolutely positioned relative to the anchor */
+.search-widget {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: none;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    border-radius: 6px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+    background: var(--vscode-editorWidget-background, var(--vscode-editor-background, #1e1e1e));
+}
+
+.search-widget[aria-hidden="false"] {
+    display: flex;
+}
+
+.search-input {
+    background: var(--vscode-input-background, #3c3c3c);
+    color: var(--vscode-input-foreground, #cccccc);
+    border: 1px solid var(--vscode-input-border, #555);
+    border-radius: 3px;
+    font-family: var(--vscode-editor-font-family, 'Consolas', monospace);
+    font-size: 12px;
+    padding: 2px 6px;
+    outline: none;
+    width: 160px;
+}
+
+.search-input:focus {
+    border-color: var(--vscode-focusBorder, #007fd4);
+}
+
+.search-count {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground, #888);
+    white-space: nowrap;
+    width: 90px;
+    flex-shrink: 0;
+    text-align: center;
+}
+
+.search-count.no-results {
+    color: var(--vscode-errorForeground, #f48771);
+}
+
+.search-nav-btn,
+.search-close-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    color: var(--vscode-foreground, #ccc);
+    cursor: pointer;
+    padding: 2px 4px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+}
+
+.search-nav-btn:hover,
+.search-close-btn:hover {
+    background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
+}
+
+.search-nav-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.search-nav-btn:disabled:hover {
+    background: transparent;
+}
+
+mark.search-highlight {
+    background: rgba(255, 200, 0, 0.4);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0;
+}
+
+mark.search-highlight.search-match-current {
+    background: rgba(255, 140, 0, 0.75);
+    outline: 1px solid rgba(255, 140, 0, 0.9);
 }

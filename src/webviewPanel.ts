@@ -272,6 +272,15 @@ export class ReviewWebviewPanel {
 <body class="${isMarkdown ? 'markdown-content' : 'plaintext-content'}">
     <div class="review-layout">
         <div class="code-pane">
+            <div class="search-anchor" id="search-anchor">
+                <div class="search-widget" id="search-widget" aria-hidden="true">
+                    <input class="search-input" id="search-input" type="text" placeholder="Find..." spellcheck="false" autocomplete="off" />
+                    <span class="search-count" id="search-count"></span>
+                    <button class="search-nav-btn" id="search-prev" title="Previous match (Shift+Enter)"><span class="codicon codicon-arrow-up"></span></button>
+                    <button class="search-nav-btn" id="search-next" title="Next match (Enter)"><span class="codicon codicon-arrow-down"></span></button>
+                    <button class="search-close-btn" id="search-close" title="Close (Escape)"><span class="codicon codicon-close"></span></button>
+                </div>
+            </div>
             ${bodyContent}
         </div>
         <div class="panel-resize-handle" id="panel-resize-handle"></div>
