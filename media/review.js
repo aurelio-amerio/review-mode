@@ -1102,17 +1102,8 @@
             for (let i = ann.startLine; i <= ann.endLine; i++) {
                 const container = document.querySelector(`.line-container[data-line="${i}"]`);
                 if (!container) { continue; }
-                const isDiffLine = container.classList.contains('diff-added') || container.classList.contains('diff-removed');
-                if (isDiffLine) {
-                    if (!container.nextElementSibling || !container.nextElementSibling.classList.contains('annotation-indicator')) {
-                        const indicator = document.createElement('div');
-                        indicator.className = 'annotation-indicator';
-                        container.after(indicator);
-                    }
-                } else {
-                    if (i === ann.startLine) { container.classList.add('annotated-start'); }
-                    container.classList.add('annotated');
-                }
+                if (i === ann.startLine) { container.classList.add('annotated-start'); }
+                container.classList.add('annotated');
             }
 
             // For deleted annotations: also highlight the deleted-line containers
@@ -1122,11 +1113,8 @@
                 for (let i = oldStart; i <= oldEnd; i++) {
                     const container = document.querySelector(`.line-container[data-old-line="${i}"]`);
                     if (container) {
-                        if (!container.nextElementSibling || !container.nextElementSibling.classList.contains('annotation-indicator')) {
-                            const indicator = document.createElement('div');
-                            indicator.className = 'annotation-indicator';
-                            container.after(indicator);
-                        }
+                        if (i === oldStart) { container.classList.add('annotated-start'); }
+                        container.classList.add('annotated');
                     }
                 }
             }

@@ -406,6 +406,7 @@ body.markdown-content {
 
 .line-container.annotated .line-content {
     background: var(--highlight);
+    border-left-color: var(--accent);
 }
 
 .line-container.annotated:hover .line-content {
@@ -491,10 +492,6 @@ body.diff-mode .line-number {
     overflow: hidden; /* BFC: contains child margins so they don't bleed out of .line-container */
     border-left: 3px solid transparent;
     transition: border-color 0.15s;
-}
-
-.line-container.annotated .line-content {
-    border-left-color: var(--accent);
 }
 
 /* --- Annotation count badge --- */
