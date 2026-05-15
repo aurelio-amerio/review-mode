@@ -44,7 +44,7 @@ body.markdown-content {
     min-width: 8px;
     overflow-x: auto;
     overflow-y: auto;
-    padding-left: 80px;
+    padding-left: 136px;
     position: relative;
 }
 
@@ -243,6 +243,8 @@ body.markdown-content {
 }
 
 .diff-gutter-marker {
+    position: absolute;
+    right: -18px;
     font-family: var(--vscode-editor-font-family, 'Consolas', monospace);
     font-size: 0.8em;
     font-weight: 700;
@@ -413,10 +415,10 @@ body.markdown-content {
 /* --- Gutter (positioned in the left margin) --- */
 .line-gutter {
     position: absolute;
-    left: -64px;
+    left: -120px;
     top: 0;
     bottom: 0;
-    width: 60px;
+    width: 116px;
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -448,15 +450,7 @@ body.diff-mode .line-number {
     display: block;
 }
 
-/* Diff mode: wider gutter to fit old + new line number columns */
-body.diff-mode .code-pane {
-    padding-left: 104px;
-}
-
-body.diff-mode .line-gutter {
-    left: -100px;
-    width: 96px;
-}
+/* Diff mode: no padding/gutter overrides needed — base gutter accommodates both modes */
 
 .add-note-btn {
     width: 20px;
