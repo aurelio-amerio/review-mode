@@ -7,7 +7,7 @@ import { ReviewModeUriHandler } from './uriHandler';
 import { ReviewedFilesProvider, ReviewedFileItem } from './reviewedFilesProvider';
 import { startDirectiveWatcher } from './directiveWatcher';
 import { registerVscodeMcpProvider } from './mcpProvider';
-import { registerInstallCommands, getInstalledVersion } from './installSkills';
+import { registerInstallCommands, getInstalledVersion, checkAndReinstallMcpServer } from './installSkills';
 import * as fs from 'fs';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -40,6 +40,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     // --- Install Cline/Cursor/VS Code skills commands ---
     registerInstallCommands(context);
+
+    // --- Startup MCP health check (fire-and-forget) ---
+    checkAndReinstallMcpServer();
 
     // --- Version-aware activation prompt ---
     showVersionAwarePrompt(context);

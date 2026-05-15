@@ -538,6 +538,67 @@ export function getInstalledVersion(context: vscode.ExtensionContext): string | 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  Startup MCP health check
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Returns true if `review-mode-mcp --version` exits successfully. */
+function isMcpServerInstalled(): Promise<boolean> {
+    return new Promise(resolve => {
+        cp.execFile('review-mode-mcp', ['--version'], { timeout: 5000 }, (err: Error | null) => {
+            resolve(!err);
+        });
+    });
+}
+
+/** Silent uv availability check (no error messages). */
+function isUvAvailable(): Promise<boolean> {
+    return new Promise(resolve => {
+        cp.execFile('uv', ['--version'], { timeout: 5000 }, (err: Error | null) => {
+            resolve(!err);
+        });
+    });
+}
+
+/**
+ * Called on extension startup: verifies review-mode-mcp is reachable and
+ * attempts a silent reinstall via uv if it is not.
+ */
+export async function checkAndReinstallMcpServer(): Promise<void> {
+    if (await isMcpServerInstalled()) { return; }
+
+    if (!await isUvAvailable()) {
+        vscode.window.showWarningMessage(
+            'Review Mode: review-mode-mcp is not installed and `uv` is not found on PATH.',
+            'Install uv',
+        ).then(choice => {
+            if (choice === 'Install uv') {
+                vscode.env.openExternal(vscode.Uri.parse('https://docs.astral.sh/uv/getting-started/installation/'));
+            }
+        });
+        return;
+    }
+
+    await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Review Mode',
+            cancellable: false,
+        },
+        async (progress) => {
+            progress.report({ message: 'Reinstalling review-mode-mcp…' });
+            const ok = await runUvTool(['tool', 'install', 'review-mode-mcp']);
+            if (ok) {
+                vscode.window.showInformationMessage('Review Mode: MCP server reinstalled successfully.');
+            } else {
+                vscode.window.showErrorMessage(
+                    'Review Mode: Failed to reinstall review-mode-mcp. Run "Install Skills" to fix manually.',
+                );
+            }
+        },
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Antigravity install
 // ─────────────────────────────────────────────────────────────────────────────
 
