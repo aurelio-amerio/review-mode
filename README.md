@@ -56,20 +56,6 @@ If the plugin is installed (see [Plugin Installation](#plugin-installation)), us
 
 The agent will open the file in the Review Mode panel. You can also just ask the agent to "open X in review mode."
 
-### From the VS Code chat participant
-
-Type in the VS Code chat panel (works with any Copilot-compatible agent):
-
-```
-@review-mode /review path/to/file
-```
-
-Or, with a file already open in the editor:
-
-```
-@review-mode /review
-```
-
 ### From the editor title bar
 
 Open any file in VS Code, then click the **💬** icon in the editor title bar, or run **Review Mode: Open File** from the Command Palette (`Ctrl+Shift+P`).
