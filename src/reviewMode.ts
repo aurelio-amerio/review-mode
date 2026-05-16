@@ -148,7 +148,8 @@ export class ReviewModeController {
             rootPath = workspaceFolder.uri.fsPath;
         } else if (workspaceRootOverride) {
             rootPath = workspaceRootOverride;
-            isExternal = true;
+            const rel = path.relative(workspaceRootOverride, originalUri.fsPath);
+            isExternal = rel.startsWith('..') || path.isAbsolute(rel);
         } else if (vscode.workspace.workspaceFolders?.length) {
             rootPath = vscode.workspace.workspaceFolders[0].uri.fsPath;
             isExternal = true;
